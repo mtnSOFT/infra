@@ -15,6 +15,24 @@ directory structure:
 - roles: contains reusable Ansible roles for various services and configurations
 - playbooks: contains playbooks for deploying and managing services
 
+## Roles
+
+| Role | Description |
+| --- | --- |
+| [docker-compose](roles/docker-compose/README.md) | Docker Engine + Compose plugin from the official apt repo |
+| [dyndns_client](roles/dyndns_client/README.md) | Keeps a dynamic DNS record up to date via cron |
+| [k3s](roles/k3s/README.md) | k3s Kubernetes cluster with cert-manager + ArgoCD |
+| [linux_base](roles/linux_base/README.md) | Base configuration applied to every host |
+| [linux_bootstrap](roles/linux_bootstrap/README.md) | First run against a fresh cloud-init host |
+| [linux_router](roles/linux_router/README.md) | Turns a host into a router/gateway |
+| [netplan](roles/netplan/README.md) | Deploys per-host netplan network config |
+| [pihole](roles/pihole/README.md) | Pi-hole DNS sinkhole / ad blocker |
+| [postgresql](roles/postgresql/README.md) | PostgreSQL 17 server |
+| [powerdns](roles/powerdns/README.md) | Authoritative PowerDNS server + zone management |
+| [shared](roles/shared/README.md) | Dynamic task loader used by every role (not deployed directly) |
+| [ufw](roles/ufw/README.md) | UFW firewall: policies, rules and WireGuard NAT |
+| [wireguard](roles/wireguard/README.md) | WireGuard VPN server + client config generation |
+
 ## Getting Started
 
 - start mtn-shell (see github.com/mtnstar/mtn-shell)

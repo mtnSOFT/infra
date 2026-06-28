@@ -1,62 +1,29 @@
-# Linux Base Role
+# linux_base
 
-## ufw
+Base configuration applied to every managed host.
 
-define firewall default rules or rules for host groups and specific hosts.
+## What it does
 
-see `roles/linux_base/defaults/main.yml` for defined default rules and config.
+- Updates the apt cache
+- Installs base packages (netplan, curl, vim, python3-pip, net-tools, ssh, cron, dnsutils, ufw)
+- Enables `unattended-upgrades` for automatic security updates
+- Removes the temporary bootstrap user
+- Hardens SSH: disables password auth, disables root login, sets the SSH port, locks the root password
+- Sets the timezone and (optionally) disables IPv6
+- Installs an Ansible-managed MOTD
 
-override them in your inventory:
+## Key variables
 
-1. in group_vars
+- `sshd_port` — SSH port (default `22`)
+- `disable_ipv6` — disable IPv6 via sysctl (default `true`)
+- `timezone` — system timezone
+- `bootstrap_user` — bootstrap user removed after base setup
+- `motd_message_url` — link shown in the MOTD
 
-e.g. inventories/production/group_vars/linux_routers/vars.yml
-```yaml
-...
-ufw_group_rules:
-  - rule: allow
-    port: "443"
-    proto: tcp
-    interface: "lanbr0"
-    direction: in
-    from_ip: "{{ secure_lan_cidr }}"
-    comment: "HTTPS secure LAN"
-  - rule: allow
-    port: "53"
-    proto: udp
-    interface: "eth1"
-    direction: in
-    from_ip: "{{ guest_lan_cidr }}"
-    comment: "DNS guest LAN"
-...
-```
+## Usage
 
-2. in host_vars
+`ansible-playbook -i inventories/production/hosts playbooks/linux_base.yml`
 
-e.g. inventories/production/host_vars/myhost/vars.yml
-```yaml
-...
-ufw_host_rules:
-  - rule: allow
-    port: "80"
-    proto: tcp
-    interface: "eth1"
-    direction: in
-    from_ip: "192.168.42.2"
-    comment: "HTTP secure LAN"
-...
-```
+To only run apt upgrades (with reboot if required) use the `update` tasks:
 
-3. in all hosts vars for defaults
-
-e.g. inventories/production/group_vars/all/vars.yml
-```yaml
-ufw_default_rules:
-  - rule: allow
-    port: "42"
-    proto: tcp
-    comment: "Special service access"
-...
-```
-
-this overrides rules defined in this roles defaults
+`ansible-playbook -i inventories/production/hosts playbooks/linux_update.yml`
