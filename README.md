@@ -7,13 +7,13 @@ this is my ansible repo for managing infrastructure and deployments including:
 - linux system config
 - k3s cluster setup
 - postgresql server
-- all other deployments are managed with kustomize for deployment on k3s
+- all other deployments are managed with argocd for deployment on k3s
 
 directory structure:
 
-- inventories: holds different environment inventories (e.g., production, staging)
-- roles: contains reusable Ansible roles for various services and configurations
-- playbooks: contains playbooks for deploying and managing services
+- **inventories** holds different environment inventories (e.g., production, staging)
+- **roles** contains reusable Ansible roles for various services and configurations
+- **playbooks** contains playbooks for deploying and managing services
 
 ## Roles
 
@@ -29,7 +29,7 @@ directory structure:
 | [pihole](roles/pihole/README.md) | Pi-hole DNS sinkhole / ad blocker |
 | [postgresql](roles/postgresql/README.md) | PostgreSQL 17 server |
 | [powerdns](roles/powerdns/README.md) | Authoritative PowerDNS server + zone management |
-| [shared](roles/shared/README.md) | Dynamic task loader used by every role (not deployed directly) |
+| [shared](roles/shared/README.md) | Shared tasks like dynamic task loader used by every role (never deployed directly) |
 | [ufw](roles/ufw/README.md) | UFW firewall: policies, rules and WireGuard NAT |
 | [wireguard](roles/wireguard/README.md) | WireGuard VPN server + client config generation |
 
@@ -38,7 +38,7 @@ directory structure:
 - start mtn-shell (see github.com/mtnstar/mtn-shell)
 - clone this repository
 - `ansible-galaxy role install -r requirements.yml -p ./.galaxy/roles`
-- copy default inventory directory and customize it (e.g. ./inventories/default -> ./inventories/production)
+- copy test inventory directory and customize it (e.g. ./inventories/test -> ./inventories/production)
 - add desired public ssh keys to `inventories/production/ssh_keys/*.pub`
 
 ## Bootstrap a new ubuntu system
