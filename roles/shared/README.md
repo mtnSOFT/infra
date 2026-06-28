@@ -2,19 +2,16 @@
 
 Helper role — **not deployed directly**. Provides the dynamic task loader used by every role.
 
-## What it does
+## Dynamic Role Tasks
 
-`tasks/dynamic_tasks_main.yml` is symlinked as each role's `tasks/main.yml`. It:
+For every role, the `tasks/main.yml` is symlinked from `roles/shared/tasks/dynamic_tasks_main.yml`. This enables us to split up a role's tasks easely into seperate files which makes the code cleaner. It also makes it possible to only run a role's specific tasks by defining param tasks:
 
-- discovers numbered task files (`1_foo.yml`, `2_bar.yml`, …) in the role's `tasks/`
-- runs them in filename order
-- lets you run a subset via `task_list` / `fixed_task_list`
+`ansible-playbook -i inventories/production/hosts playbooks/linux_bootstrap.yml -e '{task_list: ["2_user"]}'`
 
-## Usage
+just add new task ymls in the format `1_mynewtask.yml` to `roles/$ROLE/tasks/` where as the leading number defines the order the task is being executed.
 
-Run only specific tasks of a role:
+- see `roles/linux_base/tasks` for an example
+- when creating a new role, symlink `roles/shared/tasks/dynamic_tasks_main.yml` to it's `tasks/main.yml`
+- add main.yml path to `.prettierignore` and `.mega-linter.yml` since it hates symlinks ;)
 
-`ansible-playbook ... playbooks/linux_bootstrap.yml -e '{task_list: ["2_user"]}'`
-
-When creating a new role, symlink this file to the role's `tasks/main.yml` and add the
-symlink to `.prettierignore` and `.mega-linter.yml`. See the repo README "Dynamic Role Tasks".
+checkout `roles/linux_base/tasks/` for an example.
