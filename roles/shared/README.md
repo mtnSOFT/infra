@@ -1,6 +1,6 @@
 # shared
 
-Helper role — **not deployed directly**. Provides the dynamic task loader used by every role.
+Role with generic helper tasks — **never deployed directly**. 
 
 ## Dynamic Role Tasks
 
