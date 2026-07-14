@@ -58,9 +58,9 @@ jobs:
 
           # Pick the diff base.
           if [ "$EVENT" = "pull_request" ]; then
-            base="$BASE_SHA"; range="$base...$HEAD_SHA"
+            base="$BASE_SHA"; range=("$base...$HEAD_SHA")
           else
-            base="$BEFORE_SHA"; range="$base $HEAD_SHA"
+            base="$BEFORE_SHA"; range=("$base" "$HEAD_SHA")
           fi
 
           # No usable base (new branch / unknown commit) -> run everything to be safe.
@@ -70,7 +70,7 @@ jobs:
             emit "$all_json"; exit 0
           fi
 
-          changed="$(git diff --name-only $range)"
+          changed="$(git diff --name-only "${range[@]}")"
           echo "Changed files:"; echo "$changed"
 
           # Changes to global/test plumbing affect every role -> run everything.
