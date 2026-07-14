@@ -119,4 +119,4 @@ jobs:
             -v "/var/run/user/$(id -u)/podman/podman.sock:/var/run/user/1000/podman/podman.sock" \
             --userns=keep-id:uid="$(id -u)",gid="$(id -g)" \
             ghcr.io/mtnstar/mtn-shell:latest \
-            sh -c 'id && ls -lah /home/mtn-admin && cd /work && ansible-galaxy role install -r requirements.yml -p .galaxy/roles && molecule test -s ${{ matrix.scenario }}'
+            sh -c 'id && ls -lah /home/mtn-admin && cd /work && if [ "${{ matrix.scenario }}" = "powerdns" ]; then ansible-galaxy role install -r requirements.yml -p /tmp/galaxy-roles; fi && molecule test -s ${{ matrix.scenario }}'

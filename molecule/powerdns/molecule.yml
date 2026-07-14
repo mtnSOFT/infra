@@ -10,7 +10,10 @@ verifier:
 provisioner:
   name: ansible
   env:
-    ANSIBLE_ROLES_PATH: "../../.galaxy/roles:../../roles"
+    # /tmp/galaxy-roles is where CI installs the PowerDNS.pdns galaxy role
+    # (the mounted workspace is read-only there); ../../.galaxy/roles is the
+    # local install location (see README "Getting Started").
+    ANSIBLE_ROLES_PATH: "/tmp/galaxy-roles:../../.galaxy/roles:../../roles"
     ANSIBLE_VAULT_PASSWORD_FILE: "../.ansible_vault_pass.txt"
   inventory:
     # enable after moving pdns variables for testing to inventory
