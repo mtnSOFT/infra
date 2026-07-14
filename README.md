@@ -29,7 +29,6 @@ directory structure:
 | [pihole](roles/pihole/README.md) | Pi-hole DNS sinkhole / ad blocker |
 | [postgresql](roles/postgresql/README.md) | PostgreSQL 17 server |
 | [powerdns](roles/powerdns/README.md) | Authoritative PowerDNS server + zone management |
-| [shared](roles/shared/README.md) | Shared tasks like dynamic task loader used by every role (never deployed directly) |
 | [ufw](roles/ufw/README.md) | UFW firewall: policies, rules and WireGuard NAT |
 | [wireguard](roles/wireguard/README.md) | WireGuard VPN server + client config generation |
 
@@ -52,9 +51,13 @@ after bootstrapping new ubuntu system with cloud-init:
 5. apply linux_base playbook to set up basic linux configuration and users: `ansible-playbook -i inventories/production/hosts playbooks/linux_base.yml -l mynewhost`
 6. remove ansible_port if you specified it in inventory hosts
 
-## Dynamic Role Tasks
+## Role Task Layout
 
-Roles split their tasks into ordered, individually runnable files via a shared dynamic task loader. See [roles/shared](roles/shared/README.md).
+Each role splits its tasks into ordered files (`1_*.yml`, `2_*.yml`, …) imported from `tasks/main.yml`, and every file carries a tag named after it. Run a subset of a role with `--tags`, e.g.:
+
+`ansible-playbook -i inventories/production/hosts playbooks/linux_base.yml --tags user`
+
+To run a single task file of a role on its own, use `tasks_from`, e.g. `linux_update.yml` runs `linux_base`'s `update.yml`.
 
 ## Running molecule tests
 

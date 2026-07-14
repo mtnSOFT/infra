@@ -3,6 +3,4 @@
   become: true
   roles:
     - linux_base
-    - role: netplan
-      vars: 
-        fixed_task_list: ["1_install", "2_config"]
+    - netplan

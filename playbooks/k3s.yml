@@ -1,8 +1,12 @@
 - name: Install k3s cluster
   hosts: k3s
   become: yes
-  roles:
-    - role: linux_base
-      vars: 
-        fixed_task_list: ["1_update-apt-cache"]
-    - role: k3s
+  tasks:
+    - name: Update apt cache (from linux_base)
+      include_role:
+        name: linux_base
+        tasks_from: 1_update-apt-cache
+
+    - name: Install k3s
+      include_role:
+        name: k3s

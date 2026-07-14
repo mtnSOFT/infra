@@ -3,6 +3,6 @@
   hosts: all
   become: true
   roles:
-    - role: linux_base
-      #vars: 
-        #fixed_task_list: ["5_timezone"]
+    - linux_base
+  # To converge only a subset of linux_base, run molecule with tags, e.g.:
+  #   molecule converge -s linux_base -- --tags timezone

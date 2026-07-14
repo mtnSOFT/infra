@@ -1,1 +1,24 @@
-../../shared/tasks/dynamic_tasks_main.yml
+---
+# Task files run in order. Tags let you run a subset, e.g. `--tags user`.
+# To add a task file, drop it in this folder and add an import below.
+
+- import_tasks: 1_update-apt-cache.yml
+  tags: [update-apt-cache]
+
+- import_tasks: 2_base.yml
+  tags: [base]
+
+- import_tasks: 3_user.yml
+  tags: [user]
+
+- import_tasks: 4_sshd.yml
+  tags: [sshd]
+
+- import_tasks: 5_timezone.yml
+  tags: [timezone]
+
+- import_tasks: 6_net.yml
+  tags: [net]
+
+- import_tasks: 7_motd.yml
+  tags: [motd]
