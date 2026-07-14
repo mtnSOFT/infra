@@ -1,0 +1,122 @@
+name: Molecule CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # 21:00 UTC on Tue & Thu = 22:00 CET / 23:00 CEST -> Tuesday & Thursday nights (CH).
+    # Runs the full suite regardless of what changed.
+    - cron: "0 21 * * 2,4"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  # Decide which molecule scenarios to run.
+  # - push / pull_request: only scenarios whose role (or scenario) changed
+  # - schedule / manual:   all scenarios
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      scenarios: ${{ steps.select.outputs.scenarios }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Select scenarios
+        id: select
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+
+          # Discover all role-backed scenarios (the empty "default" scenario is skipped).
+          mapfile -t ALL < <(
+            for d in molecule/*/; do
+              name="$(basename "$d")"
+              [ "$name" = "default" ] && continue
+              [ -d "roles/$name" ] || continue
+              echo "$name"
+            done
+          )
+          all_json="$(printf '%s\n' "${ALL[@]}" | jq -R . | jq -cs .)"
+          echo "Available scenarios: $all_json"
+
+          emit() { echo "scenarios=$1" >> "$GITHUB_OUTPUT"; echo "Selected: $1"; }
+
+          # Full suite on schedule / manual dispatch.
+          if [ "$EVENT" = "schedule" ] || [ "$EVENT" = "workflow_dispatch" ]; then
+            emit "$all_json"; exit 0
+          fi
+
+          # Pick the diff base.
+          if [ "$EVENT" = "pull_request" ]; then
+            base="$BASE_SHA"; range="$base...$HEAD_SHA"
+          else
+            base="$BEFORE_SHA"; range="$base $HEAD_SHA"
+          fi
+
+          # No usable base (new branch / unknown commit) -> run everything to be safe.
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ] \
+             || ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
+            echo "No usable diff base; running full suite."
+            emit "$all_json"; exit 0
+          fi
+
+          changed="$(git diff --name-only $range)"
+          echo "Changed files:"; echo "$changed"
+
+          # Changes to global/test plumbing affect every role -> run everything.
+          if echo "$changed" | grep -qE '^(inventories/test/|molecule/\.|requirements\.yml|ansible\.cfg|\.github/workflows/molecule\.yml)'; then
+            echo "Global path changed; running full suite."
+            emit "$all_json"; exit 0
+          fi
+
+          # Otherwise: a scenario runs if its role or its molecule scenario changed.
+          selected=()
+          for name in "${ALL[@]}"; do
+            if echo "$changed" | grep -qE "^(roles/${name}/|molecule/${name}/)"; then
+              selected+=("$name")
+            fi
+          done
+
+          if [ "${#selected[@]}" -eq 0 ]; then
+            emit "[]"
+          else
+            emit "$(printf '%s\n' "${selected[@]}" | jq -R . | jq -cs .)"
+          fi
+
+  molecule:
+    needs: detect
+    if: ${{ needs.detect.outputs.scenarios != '[]' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: ${{ fromJSON(needs.detect.outputs.scenarios) }}
+    name: molecule (${{ matrix.scenario }})
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Start podman service
+        run: |
+          podman --version
+          systemctl --user start podman.socket
+
+      - name: Run molecule ${{ matrix.scenario }} scenario
+        run: |
+          podman run --rm \
+            -v "${{ github.workspace }}":/work \
+            -w /work \
+            -v "/var/run/user/$(id -u)/podman/podman.sock:/var/run/user/1000/podman/podman.sock" \
+            --userns=keep-id:uid="$(id -u)",gid="$(id -g)" \
+            ghcr.io/mtnstar/mtn-shell:latest \
+            sh -c 'id && ls -lah /home/mtn-admin && cd /work && molecule test -s ${{ matrix.scenario }}'

@@ -1,1 +1,12 @@
-../../shared/tasks/dynamic_tasks_main.yml
+---
+# Task files run in order. Tags let you run a subset, e.g. `--tags reload`.
+# To add a task file, drop it in this folder and add an import below.
+
+- import_tasks: 1_ufw.yml
+  tags: [ufw]
+
+- import_tasks: 2_wireguard.yml
+  tags: [wireguard]
+
+- import_tasks: 9_reload.yml
+  tags: [reload]

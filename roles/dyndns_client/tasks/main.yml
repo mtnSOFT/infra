@@ -1,1 +1,6 @@
-../../shared/tasks/dynamic_tasks_main.yml
+---
+# Task files run in order. Tags let you run a subset, e.g. `--tags <name>`.
+# To add a task file, drop it in this folder and add an import below.
+
+- import_tasks: 1_dyndns-update-script.yml
+  tags: [dyndns-update-script]

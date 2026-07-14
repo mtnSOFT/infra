@@ -27,6 +27,3 @@ PYTHON_BANDIT_FILTER_REGEX_EXCLUDE: ^molecule?/
 
 # config is created during megalinter ci run and king fisher complains about credential in there
 REPOSITORY_KINGFISHER_ARGUMENTS: "--exclude .git/"
-
-# ignore symlinked tasks/main.yml by prettier
-YAML_PRETTIER_FILTER_REGEX_EXCLUDE: '(^|/)(roles/(docker-compose|dyndns_client|k3s|linux_base|linux_bootstrap|linux_router|netplan|pihole|wireguard|powerdns|postgresql|ufw)/tasks/main\.yml)$'

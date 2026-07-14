@@ -1,1 +1,18 @@
-../../shared/tasks/dynamic_tasks_main.yml
+---
+# Task files run in order. Tags let you run a subset, e.g. `--tags clients`.
+# To add a task file, drop it in this folder and add an import below.
+
+- import_tasks: 1_install.yml
+  tags: [install]
+
+- import_tasks: 2_server-config.yml
+  tags: [server-config]
+
+- import_tasks: 3_clients.yml
+  tags: [clients]
+
+- import_tasks: 5_service.yml
+  tags: [service]
+
+- import_tasks: 9_local-config-backup.yml
+  tags: [local-config-backup]

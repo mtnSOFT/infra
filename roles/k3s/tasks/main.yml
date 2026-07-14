@@ -1,1 +1,18 @@
-../../shared/tasks/dynamic_tasks_main.yml
+---
+# Task files run in order. Tags let you run a subset, e.g. `--tags argocd`.
+# To add a task file, drop it in this folder and add an import below.
+
+- import_tasks: 1_install.yml
+  tags: [install]
+
+- import_tasks: 2_kvm.yml
+  tags: [kvm]
+
+- import_tasks: 3_cert-manager.yml
+  tags: [cert-manager]
+
+- import_tasks: 4_argocd.yml
+  tags: [argocd]
+
+- import_tasks: 5_helpers.yml
+  tags: [helpers]
