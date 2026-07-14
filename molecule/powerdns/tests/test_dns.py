@@ -33,31 +33,16 @@ def test_dns_query_ns_record(host):
     assert "ns1.example.local" in cmd.stdout
 
 
-def test_dns_query_a_record(host):
-    """Test DNS A record query for ns1.example.local"""
-    cmd = host.run("dig @127.0.0.1 -p 5300 ns1.example.local A +short")
-    assert cmd.rc == 0
-    # Should return an IP address
-    assert len(cmd.stdout.strip()) > 0
-
-
-def test_dns_query_inventory_host(host):
-    """Test DNS query for inventory host record"""
-    # Query for the test instance itself
-    cmd = host.run("dig @127.0.0.1 -p 5300 instance.example.local A +short")
-    assert cmd.rc == 0
-    # Should return an IP address
-    output = cmd.stdout.strip()
-    assert len(output) > 0
-    # Basic IP validation
-    assert output.count('.') == 3
-
-
 def test_dns_query_manual_record(host):
-    """Test DNS query for manually configured record"""
-    # Test a manual A record (adjust based on your config)
+    """Test DNS query for the manually configured A record.
+
+    The converge play sets pdns_records_manual to www.example.local -> 192.168.1.100.
+    (Auto-generated records from inventory hosts are not tested here: no test host
+    carries an IP, so pdns_auto_inventory_records is disabled for this scenario.)
+    """
     cmd = host.run("dig @127.0.0.1 -p 5300 www.example.local A +short")
     assert cmd.rc == 0
+    assert "192.168.1.100" in cmd.stdout
 
 
 def test_pdns_database_exists(host):

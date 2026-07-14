@@ -24,13 +24,19 @@ provisioner:
     hosts:
       all:
         hosts:
-          instance:
+          # must match the platform name above so these vars attach to the
+          # real container; otherwise they land on a host with no container
+          # and PowerDNS starts unconfigured (wait_for :5300 then times out).
+          testhost-ubuntu-24.04:
             ansible_user: test-admin
             bootstrap_user: test-bootstrap
             timezone: "Europe/Zurich"
             secure_lan_cidr: "127.0.0.1/32"
             pdns_zone_name: example.local
             pdns_zone_admin: hostmaster.example.local
+            # No test host carries an IP, so the auto-record path yields nothing
+            # useful; disable it so only the manual records below are served.
+            pdns_auto_inventory_records: false
 
             pdns_records_manual:
               - name: pihole
