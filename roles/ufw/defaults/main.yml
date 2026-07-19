@@ -18,7 +18,7 @@ ufw_default_rules:
   - rule: allow
     port: "{{ sshd_port | default(22) }}"
     proto: tcp
-    from_ip: "{{ secure_lan_cidr }}"
+    from_ip: "{{ server_lan_cidr }}"
     comment: "SSH access"
 
 # Group-specific rules (define in group_vars)
@@ -31,5 +31,5 @@ ufw_host_rules: []
 ufw_applications: []
 
 # networks
-secure_lan_cidr: "10.0.0.0/24"
-guest_lan_cidr: "192.168.1.0/24"
+server_lan_cidr: "10.0.0.0/24"
+lan_cidr: "192.168.1.0/24"

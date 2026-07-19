@@ -17,7 +17,7 @@ Configures the UFW firewall: default policies, rules and (optional) WireGuard NA
 - `ufw_logging_level` — `on|off|low|medium|high|full` (default `low`)
 - `ufw_default_rules` / `ufw_group_rules` / `ufw_host_rules` — rule lists (see below)
 - `ufw_applications` — UFW app profiles to allow
-- `secure_lan_cidr` / `guest_lan_cidr` — network CIDRs used in rules
+- `server_lan_cidr` / `lan_cidr` — network CIDRs used in rules
 - `wireguard_subnet` / `wireguard_external_interface` — enable + scope NAT masquerading
 
 ## Defining rules
@@ -33,8 +33,8 @@ ufw_group_rules:
     proto: tcp
     interface: "lanbr0"
     direction: in
-    from_ip: "{{ secure_lan_cidr }}"
-    comment: "HTTPS secure LAN"
+    from_ip: "{{ server_lan_cidr }}"
+    comment: "HTTPS server LAN"
 ```
 
 **Host rules** — e.g. `inventories/production/host_vars/myhost/vars.yml`:
@@ -47,7 +47,7 @@ ufw_host_rules:
     interface: "eth1"
     direction: in
     from_ip: "192.168.42.2"
-    comment: "HTTP secure LAN"
+    comment: "HTTP server LAN"
 ```
 
 **Default rules for all hosts** — e.g. `inventories/production/group_vars/all/vars.yml`
