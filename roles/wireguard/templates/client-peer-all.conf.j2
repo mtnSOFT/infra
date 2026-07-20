@@ -4,6 +4,9 @@ Address = {{ client.ip }}
 {% if wireguard_dns_servers | length > 0 %}
 DNS = {{ wireguard_dns_servers | join(', ') }}
 {% endif %}
+{% if wireguard_mtu %}
+MTU = {{ wireguard_mtu }}
+{% endif %}
 
 [Peer]
 PublicKey = {{ wireguard_server_public_key }}
