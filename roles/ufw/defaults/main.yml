@@ -33,3 +33,15 @@ ufw_applications: []
 # networks
 server_lan_cidr: "10.0.0.0/24"
 lan_cidr: "192.168.1.0/24"
+
+# --- NAT / masquerading ---
+# Masquerade the server LAN out through the upstream LAN interface so it reaches
+# the Internet via this router (server LAN -> router -> LAN -> upstream router).
+# Enable per-router in group_vars/host_vars.
+server_lan_nat: false
+# Upstream LAN-facing interface that server LAN traffic is masqueraded out of.
+lan_interface: "eth0"
+
+# Extra masquerade rules, rendered into the same *nat block. Each entry is a
+# mapping { source: <cidr>, out_interface: <egress iface> }.
+ufw_nat_rules: []

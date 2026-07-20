@@ -1,4 +1,0 @@
----
-- name: Setup wireguard ufw config
-  include_tasks: "wireguard.yml"
-  when: wireguard_subnet is defined

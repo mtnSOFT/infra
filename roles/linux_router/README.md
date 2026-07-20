@@ -8,6 +8,9 @@ Turns a host into a Linux router/gateway.
 - Enables and starts the `nftables` service
 - Enables IPv4 forwarding (`net.ipv4.ip_forward=1`)
 
+NAT masquerading (e.g. server LAN → upstream LAN → Internet) is configured by the
+[ufw](../ufw/README.md) role via `server_lan_nat` — see its README.
+
 ## Usage
 
 `ansible-playbook -i inventories/production/hosts playbooks/linux_router.yml`

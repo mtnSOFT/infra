@@ -1,0 +1,49 @@
+---
+# Build the list of masquerade rules from every NAT source, then render them
+# into a single *nat block in before.rules. UFW/iptables-restore allows only one
+# *nat table, so every MASQUERADE rule must share the same block.
+#
+# Each rule is a mapping: { source: <cidr>, out_interface: <egress iface> }.
+# Sources, in order:
+#   - ufw_nat_rules        explicit, arbitrary rules
+#   - server_lan_nat       server LAN -> upstream LAN (this router as gateway)
+#   - wireguard_subnet     VPN clients -> upstream (kept for backwards compat)
+- name: Build masquerade rule list
+  ansible.builtin.set_fact:
+    _ufw_masquerade_rules: >-
+      {{ (ufw_nat_rules | default([]))
+         + ([{'source': server_lan_cidr, 'out_interface': lan_interface}]
+            if (server_lan_nat | default(false) | bool) else [])
+         + ([{'source': wireguard_subnet, 'out_interface': wireguard_external_interface}]
+            if (wireguard_subnet is defined) else []) }}
+
+- name: Configure UFW NAT masquerading
+  when: _ufw_masquerade_rules | length > 0
+  block:
+    - name: Allow forwarded traffic in UFW (DEFAULT_FORWARD_POLICY)
+      ansible.builtin.lineinfile:
+        path: /etc/default/ufw
+        regexp: "^DEFAULT_FORWARD_POLICY="
+        line: 'DEFAULT_FORWARD_POLICY="ACCEPT"'
+        backup: yes
+
+    - name: Remove legacy WireGuard-only NAT block (folded into the unified block)
+      ansible.builtin.blockinfile:
+        path: /etc/ufw/before.rules
+        marker: "# {mark} ANSIBLE MANAGED BLOCK - WireGuard NAT"
+        state: absent
+
+    - name: Render NAT masquerade rules into before.rules
+      ansible.builtin.blockinfile:
+        path: /etc/ufw/before.rules
+        insertbefore: '^\*filter'
+        marker: "# {mark} ANSIBLE MANAGED BLOCK - UFW NAT"
+        block: |
+          # NAT table rules (masquerade) - Ansible managed
+          *nat
+          :POSTROUTING ACCEPT [0:0]
+          {% for rule in _ufw_masquerade_rules %}
+          -A POSTROUTING -s {{ rule.source }} -o {{ rule.out_interface }} -j MASQUERADE
+          {% endfor %}
+          COMMIT
+        backup: yes
