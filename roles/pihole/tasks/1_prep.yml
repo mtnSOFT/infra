@@ -1,43 +1,33 @@
 ---
-- name: Create pihole group
-  ansible.builtin.group:
-    name: pihole
-    gid: 953
-    state: present
-    force: true
+- name: Create Pi-hole project directory
+  ansible.builtin.file:
+    path: "{{ pihole_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
 
-- name: Create pihole user
-  ansible.builtin.user:
-    name: pihole
-    uid: 953
-    home: "/home/pihole"
-    shell: "/usr/sbin/nologin"
-    group: pihole
-    password: "*"
-    state: present
-    force: true
+- name: Create Pi-hole persistent config directory
+  ansible.builtin.file:
+    path: "{{ pihole_dir }}/etc-pihole"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Render Pi-hole secrets env file
+  ansible.builtin.template:
+    src: pihole.env.j2
+    dest: "{{ pihole_dir }}/.env"
+    owner: root
+    group: root
+    mode: "0600"
   no_log: true
 
-- name: Create config directory
-  ansible.builtin.file:
-    state: directory
-    path: /etc/pihole
-    owner: pihole
-    group: pihole
-    mode: "775"
-
-- name: Create pihole web directory
-  ansible.builtin.file:
-    state: directory
-    path: /opt/pihole/web/admin
-    owner: pihole
-    group: pihole
-    mode: "775"
-
-- name: Pre-configure pihole
+- name: Render Pi-hole compose file
   ansible.builtin.template:
-    src: pihole.toml.j2
-    dest: /etc/pihole/pihole.toml
-    owner: pihole
-    group: pihole
-    mode: "640"
+    src: compose.yaml.j2
+    dest: "{{ pihole_dir }}/compose.yaml"
+    owner: root
+    group: root
+    mode: "0644"
