@@ -5,8 +5,8 @@
 - import_tasks: 1_ufw.yml
   tags: [ufw]
 
-- import_tasks: 2_wireguard.yml
-  tags: [wireguard]
+- import_tasks: 2_nat.yml
+  tags: [nat, wireguard]
 
 - import_tasks: 9_reload.yml
   tags: [reload]
