@@ -34,6 +34,15 @@ query databases) lives in `{{ pihole_dir }}/etc-pihole`.
   (default `0.0.0.0`, i.e. all interfaces)
 
 Set either to a specific IP to publish that protocol on a single interface only.
+Either variable may also be a **list of IPs** to publish that protocol on
+several interfaces at once — each IP gets its own set of port mappings in the
+generated compose file:
+
+```yaml
+pihole_dns_listen_ip:
+  - "10.0.0.1"
+  - "192.168.1.1"
+```
 
 ## Usage
 

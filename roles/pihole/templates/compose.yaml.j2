@@ -1,4 +1,6 @@
 # Ansible managed
+{% set pihole_dns_listen_ips = [pihole_dns_listen_ip] if pihole_dns_listen_ip is string else pihole_dns_listen_ip %}
+{% set pihole_web_listen_ips = [pihole_web_listen_ip] if pihole_web_listen_ip is string else pihole_web_listen_ip %}
 services:
   pihole:
     container_name: pihole
@@ -19,11 +21,15 @@ services:
       FTLCONF_dhcp_active: "false"
     ports:
       # DNS (53/tcp+udp)
-      - "{{ pihole_dns_listen_ip }}:53:53/tcp"
-      - "{{ pihole_dns_listen_ip }}:53:53/udp"
+{% for ip in pihole_dns_listen_ips %}
+      - "{{ ip }}:53:53/tcp"
+      - "{{ ip }}:53:53/udp"
+{% endfor %}
       # Web admin (HTTP + HTTPS)
-      - "{{ pihole_web_listen_ip }}:80:80/tcp"
-      - "{{ pihole_web_listen_ip }}:443:443/tcp"
+{% for ip in pihole_web_listen_ips %}
+      - "{{ ip }}:80:80/tcp"
+      - "{{ ip }}:443:443/tcp"
+{% endfor %}
     volumes:
       - "{{ pihole_dir }}/etc-pihole:/etc/pihole"
     cap_add:
