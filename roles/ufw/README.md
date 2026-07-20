@@ -9,7 +9,8 @@ Configures the UFW firewall: default policies, rules and (optional) NAT masquera
 - Resets UFW and sets default policies (in: deny, out: allow, routed: deny)
 - Applies default, group and host rules, then enables UFW
 - Renders NAT masquerade rules into a single `*nat` block in `before.rules`
-  (server LAN NAT and/or WireGuard NAT), setting `DEFAULT_FORWARD_POLICY=ACCEPT`
+  (server LAN NAT and/or WireGuard NAT) and adds a `ufw route allow` for each
+  masqueraded source, so forwarding can stay default-deny
 
 ## Key variables
 
@@ -68,9 +69,14 @@ ufw_default_rules:
 ## NAT masquerading
 
 The role renders all masquerade rules into one `*nat` block in `before.rules`
-(iptables-restore allows only a single `*nat` table) and sets
-`DEFAULT_FORWARD_POLICY="ACCEPT"`. Forwarding itself is enabled by the
-[linux_router](../linux_router/README.md) role (`net.ipv4.ip_forward=1`).
+(iptables-restore allows only a single `*nat` table). Kernel IP forwarding is
+enabled by the [linux_router](../linux_router/README.md) role
+(`net.ipv4.ip_forward=1`).
+
+Forwarding stays **default-deny** (`ufw_default_policy_routed: deny`): for every
+masqueraded source the role adds `ufw route allow from <cidr>`, permitting that
+subnet out to anywhere while everything else stays blocked. To instead allow all
+forwarded traffic, set `ufw_default_policy_routed: allow`.
 
 **Server LAN NAT** — make a router (e.g. the `stargate` gateway) NAT the server
 LAN out to the upstream LAN / Internet

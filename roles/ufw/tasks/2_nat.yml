@@ -20,13 +20,6 @@
 - name: Configure UFW NAT masquerading
   when: _ufw_masquerade_rules | length > 0
   block:
-    - name: Allow forwarded traffic in UFW (DEFAULT_FORWARD_POLICY)
-      ansible.builtin.lineinfile:
-        path: /etc/default/ufw
-        regexp: "^DEFAULT_FORWARD_POLICY="
-        line: 'DEFAULT_FORWARD_POLICY="ACCEPT"'
-        backup: yes
-
     - name: Remove legacy WireGuard-only NAT block (folded into the unified block)
       ansible.builtin.blockinfile:
         path: /etc/ufw/before.rules
@@ -47,3 +40,17 @@
           {% endfor %}
           COMMIT
         backup: yes
+
+    # Permit the forwarded traffic itself. Forwarding stays default-deny
+    # (ufw_default_policy_routed); each masqueraded source is allowed out to
+    # anywhere with an explicit `ufw route allow from <cidr>`.
+    - name: Allow forwarding from each masqueraded source to anywhere
+      community.general.ufw:
+        route: true
+        rule: allow
+        from_ip: "{{ nat_rule.source }}"
+        comment: "NAT forward: {{ nat_rule.source }} to anywhere"
+      loop: "{{ _ufw_masquerade_rules }}"
+      loop_control:
+        loop_var: nat_rule
+        label: "{{ nat_rule.source }}"
