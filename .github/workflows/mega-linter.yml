@@ -133,6 +133,10 @@ jobs:
           !contains(github.event.head_commit.message, 'skip fix')
         with:
           token: ${{ secrets.PAT || secrets.GITHUB_TOKEN }}
+          # On pull_request events the checkout is a detached HEAD (the merge
+          # ref), so create-pull-request cannot infer the target branch and
+          # errors unless 'base' is supplied. Fall back to the pushed branch.
+          base: ${{ github.event.pull_request.base.ref || github.ref_name }}
           commit-message: "[MegaLinter] Apply linters automatic fixes"
           title: "[MegaLinter] Apply linters automatic fixes"
           labels: bot

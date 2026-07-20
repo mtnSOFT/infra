@@ -2,7 +2,16 @@
 pdns_zone_name: example.local
 pdns_zone_admin: admin.example.local
 
+# No test host carries an IP, so the auto-record path yields nothing useful;
+# disable it so only the manual records below are served.
+pdns_auto_inventory_records: false
+
 pdns_records_manual:
+  - name: www
+    zone: example.local
+    type: A
+    content: 192.168.1.100
+    ttl: 3600
   - name: pihole
     zone: example.local
     type: CNAME
@@ -13,10 +22,20 @@ pdns_database_name: /var/lib/powerdns/pdns.sqlite3
 pdns_config:
   primary: true
   secondary: false
-  local-address: 0.0.0.0
+  # Authoritative server sits on loopback behind the recursor.
+  local-address: 127.0.0.1
   local-port: 5300
 pdns_backends:
   gsqlite3:
     database: "{{ pdns_database_name }}"
 pdns_sqlite_databases_locations:
   - "{{ pdns_database_name }}"
+
+# --- Recursor (resolver for queries outside example.local) ---
+powerdns_recursor_enabled: true
+# 'lo' resolves to 127.0.0.1: exercises the interface -> IPv4 resolution path
+# and keeps the recursor off any real interface during tests.
+powerdns_listen_interfaces:
+  - lo
+powerdns_recursor_port: 53
+# Upstreams default to dns1 / dns2 (8.8.8.8 / 8.8.4.4) from group_vars/all.

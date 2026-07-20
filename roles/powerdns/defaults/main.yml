@@ -2,3 +2,58 @@
 pdns_auto_inventory_records: true
 pdns_records_from_hosts: []
 pdns_primary_ns: "ns1.{{ pdns_zone_name }}"
+
+# --- Recursion: resolver for queries outside the local zone ---
+# When enabled, the PowerDNS Recursor is installed as the front-end resolver.
+# It answers every client query: the local zone (pdns_zone_name) is forwarded to
+# the authoritative server on loopback, everything else is forwarded to the
+# upstream resolvers below. The authoritative server itself only listens on
+# loopback (see powerdns_auth_address / pdns_config.local-address).
+powerdns_recursor_enabled: true
+
+# Interfaces the recursor listens on. Interface names are resolved to their
+# primary IPv4 address from gathered facts. Takes precedence over
+# powerdns_listen_addresses when set. Example: [eth0, eth1]
+powerdns_listen_interfaces: []
+
+# Explicit listen IP addresses, used verbatim when no interfaces are given.
+# Example: ["192.0.2.53", "203.0.113.53"]
+powerdns_listen_addresses: []
+
+# Fallback when neither interfaces nor addresses are set: listen on all IPv4.
+powerdns_listen_default: "0.0.0.0"
+
+# Port the recursor answers client queries on.
+powerdns_recursor_port: 53
+
+# Networks allowed to query the recursor. Keeps it from becoming an open
+# resolver; defaults to loopback + RFC1918 + ULA/link-local.
+powerdns_recursor_allow_from:
+  - 127.0.0.0/8
+  - 10.0.0.0/8
+  - 172.16.0.0/12
+  - 192.168.0.0/16
+  - "::1/128"
+  - fc00::/7
+  - fe80::/10
+
+# Upstream resolvers for queries outside the local zone.
+powerdns_recursor_upstreams:
+  - "{{ dns1 | default('8.8.8.8') }}"
+  - "{{ dns2 | default('8.8.4.4') }}"
+
+# DNSSEC validation mode:
+# off | process-no-validate | process | log-fail | validate
+powerdns_recursor_dnssec: process
+
+# Where the authoritative server listens (loopback, behind the recursor).
+# These must match pdns_config.local-address / pdns_config.local-port; they are
+# used to build the recursor forward-zone that serves the local zone.
+powerdns_auth_address: 127.0.0.1
+powerdns_auth_port: 5300
+
+# APT repository preset used to install a YAML-capable recursor (>= 5.x). Ubuntu
+# ships pdns-recursor 4.9.x, which predates the YAML settings the recursor role
+# emits, so the official PowerDNS repo is required. pdns_rec_powerdns_repo_54 is
+# defined in the PowerDNS.pdns_recursor role's vars (resolved lazily on include).
+powerdns_recursor_install_repo: "{{ pdns_rec_powerdns_repo_54 }}"

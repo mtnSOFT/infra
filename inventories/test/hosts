@@ -3,3 +3,6 @@
 
 [wireguard]
 testhost-ubuntu-24.04
+
+[powerdns]
+testhost-ubuntu-24.04

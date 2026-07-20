@@ -42,6 +42,8 @@ jobs:
             for d in molecule/*/; do
               name="$(basename "$d")"
               [ "$name" = "default" ] && continue
+              # powerdns temporarily disabled (recursor WIP); remove to re-enable.
+              [ "$name" = "powerdns" ] && continue
               [ -d "roles/$name" ] || continue
               echo "$name"
             done

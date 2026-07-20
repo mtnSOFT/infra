@@ -3,3 +3,4 @@ collections:
   - name: community.docker
 roles:
   - name: PowerDNS.pdns
+  - name: PowerDNS.pdns_recursor

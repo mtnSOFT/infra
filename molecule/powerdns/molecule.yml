@@ -1,0 +1,27 @@
+---
+driver:
+  name: podman
+platforms:
+  - name: testhost-ubuntu-24.04
+    image: ghcr.io/mtnsoft/infra-test-ubuntu:24.04
+    pre_build_image: true
+    # Boot real systemd so the pdns / pdns-recursor services actually run.
+    command: /usr/lib/systemd/systemd
+    systemd: always
+verifier:
+  name: testinfra
+  options:
+    sudo: true
+provisioner:
+  name: ansible
+  env:
+    # /tmp/galaxy-roles is where CI installs the PowerDNS.pdns(_recursor) galaxy
+    # roles (the mounted workspace is read-only there); ../../.galaxy/roles is the
+    # local install location (see README "Getting Started").
+    ANSIBLE_ROLES_PATH: "/tmp/galaxy-roles:../../.galaxy/roles:../../roles"
+    ANSIBLE_VAULT_PASSWORD_FILE: "../.ansible_vault_pass.txt"
+  inventory:
+    links:
+      group_vars: "../../inventories/test/group_vars/"
+      host_vars: "../../inventories/test/host_vars/"
+      hosts: "../../inventories/test/hosts"
