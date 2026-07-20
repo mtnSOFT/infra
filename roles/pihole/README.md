@@ -6,7 +6,6 @@ role to have installed Docker Engine and the Compose plugin first.
 
 ## What it does
 
-- Stops and disables any leftover native `pihole-FTL` service (non-destructive)
 - Creates the compose project under `{{ pihole_dir }}` (default `/containers/pihole`)
 - Renders `.env` (admin password, `0600`) and `compose.yaml`
 - Brings the stack up with `docker compose` (via `community.docker.docker_compose_v2`), pulling the latest image for the configured tag
