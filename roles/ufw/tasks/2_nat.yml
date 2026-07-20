@@ -54,3 +54,14 @@
       loop_control:
         loop_var: nat_rule
         label: "{{ nat_rule.source }}"
+
+  rescue:
+    - name: UFW NAT configuration failed on host
+      ansible.builtin.debug:
+        msg:
+          - "UFW NAT config block failed on host {{ inventory_hostname }}."
+          - "Review earlier task output for the root cause."
+
+    - name: Fail explicitly after UFW NAT config error
+      ansible.builtin.fail:
+        msg: "UFW NAT configuration failed on {{ inventory_hostname }}."
