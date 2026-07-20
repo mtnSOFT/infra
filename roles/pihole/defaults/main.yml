@@ -1,1 +1,12 @@
+---
+# Container image and tag for the Pi-hole stack
+pihole_image: "pihole/pihole"
 pihole_version_tag: "latest"
+
+# Where the compose project and its persistent /etc/pihole volume live
+pihole_dir: "/containers/pihole"
+
+# Host IP the published ports bind to. Defaults to 0.0.0.0 (all interfaces);
+# set to a specific IP to restrict that protocol to a single interface.
+pihole_dns_listen_ip: "0.0.0.0"   # DNS (53/tcp+udp)
+pihole_web_listen_ip: "0.0.0.0"   # web admin (80/443)

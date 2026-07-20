@@ -5,6 +5,7 @@
   roles:
     - netplan
     - linux_router
+    - docker-compose
     - pihole
     - wireguard
     - ufw

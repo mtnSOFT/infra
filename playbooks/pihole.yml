@@ -3,4 +3,5 @@
   hosts: linux_routers
   become: true
   roles:
+    - docker-compose
     - pihole
