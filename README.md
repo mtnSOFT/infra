@@ -28,7 +28,7 @@ directory structure:
 | [netplan](roles/netplan/README.md) | Deploys per-host netplan network config |
 | [pihole](roles/pihole/README.md) | Pi-hole DNS sinkhole / ad blocker |
 | [postgresql](roles/postgresql/README.md) | PostgreSQL 17 server |
-| [powerdns](roles/powerdns/README.md) | Authoritative PowerDNS server + zone management |
+| [powerdns](roles/powerdns/README.md) | Authoritative PowerDNS server + Recursor (resolves outside the local zone) |
 | [ufw](roles/ufw/README.md) | UFW firewall: policies, rules and WireGuard NAT |
 | [wireguard](roles/wireguard/README.md) | WireGuard VPN server + client config generation |
 

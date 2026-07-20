@@ -1,0 +1,68 @@
+---
+# Install the PowerDNS Recursor as the front-end resolver (port 53) so the host
+# answers queries outside its own zone. The local zone is forwarded back to the
+# authoritative server on loopback; everything else goes to the upstreams.
+
+- name: Gather network facts for interface resolution
+  ansible.builtin.setup:
+    gather_subset:
+      - network
+  when: powerdns_listen_interfaces | length > 0
+
+- name: Resolve listen interfaces to their primary IPv4 address
+  ansible.builtin.set_fact:
+    _powerdns_iface_addresses: >-
+      {{ powerdns_listen_interfaces
+         | map('extract', ansible_facts)
+         | map(attribute='ipv4.address', default='')
+         | select('truthy')
+         | list }}
+  when: powerdns_listen_interfaces | length > 0
+
+- name: Ensure every requested interface resolved to an IPv4 address
+  ansible.builtin.assert:
+    that:
+      - _powerdns_iface_addresses | length == powerdns_listen_interfaces | length
+    fail_msg: >-
+      Could not resolve an IPv4 address for one or more of
+      powerdns_listen_interfaces ({{ powerdns_listen_interfaces }}).
+      Resolved: {{ _powerdns_iface_addresses }}.
+  when: powerdns_listen_interfaces | length > 0
+
+- name: Determine effective recursor listen addresses
+  ansible.builtin.set_fact:
+    _powerdns_listen_addresses: >-
+      {{ _powerdns_iface_addresses
+         if (powerdns_listen_interfaces | length > 0)
+         else (powerdns_listen_addresses
+               if (powerdns_listen_addresses | length > 0)
+               else [powerdns_listen_default]) }}
+
+- name: Build the PowerDNS Recursor configuration
+  ansible.builtin.set_fact:
+    _powerdns_rec_config:
+      incoming:
+        listen: "{{ _powerdns_listen_addresses }}"
+        port: "{{ powerdns_recursor_port }}"
+        allow_from: "{{ powerdns_recursor_allow_from }}"
+      dnssec:
+        validation: "{{ powerdns_recursor_dnssec }}"
+      recursor:
+        # Local zone: forward to the authoritative server (RD=0). The `recurse`
+        # field is fixed in this context and must not be set here.
+        forward_zones:
+          - zone: "{{ pdns_zone_name }}"
+            forwarders:
+              - "{{ powerdns_auth_address }}:{{ powerdns_auth_port }}"
+        # Everything else: forward to the upstream resolvers with recursion
+        # desired (RD=1) via the dedicated forward_zones_recurse setting.
+        forward_zones_recurse:
+          - zone: "."
+            forwarders: "{{ powerdns_recursor_upstreams }}"
+
+- name: Install and configure the PowerDNS Recursor
+  ansible.builtin.include_role:
+    name: PowerDNS.pdns_recursor
+  vars:
+    pdns_rec_install_repo: "{{ powerdns_recursor_install_repo }}"
+    pdns_rec_config: "{{ _powerdns_rec_config }}"
