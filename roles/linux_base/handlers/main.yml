@@ -2,3 +2,8 @@
   service:
     name: ssh
     state: restarted
+
+- name: Restart systemd-resolved
+  ansible.builtin.systemd:
+    name: systemd-resolved
+    state: restarted

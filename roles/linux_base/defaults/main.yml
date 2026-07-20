@@ -1,3 +1,6 @@
 sshd_port: 22
 disable_ipv6: true
 motd_message_url: "https://github.com/mtnsoft/infra"
+# Run the first-run bootstrap tasks (set hostname, remove cloud-init, create the
+# infra admin user + SSH keys). Set to false to skip them, e.g. in molecule.
+linux_base_bootstrap: true
