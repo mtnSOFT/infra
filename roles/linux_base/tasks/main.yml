@@ -1,24 +1,35 @@
 ---
-# Task files run in order. Tags let you run a subset, e.g. `--tags user`.
+# Task files run in order. Tags let you run a subset, e.g. `--tags sshd`.
 # To add a task file, drop it in this folder and add an import below.
 
-- import_tasks: 1_update-apt-cache.yml
+# First-run bootstrap tasks: run once against a fresh cloud-init host while
+# connected as the temporary bootstrap user, e.g. `--tags bootstrap`. Set
+# `linux_base_bootstrap: false` to skip them (see defaults/main.yml).
+- import_tasks: 1_hostname.yml
+  tags: [hostname, bootstrap]
+  when: linux_base_bootstrap | bool
+
+- import_tasks: 2_admin-user.yml
+  tags: [admin-user, bootstrap]
+  when: linux_base_bootstrap | bool
+
+- import_tasks: 3_update-apt-cache.yml
   tags: [update-apt-cache]
 
-- import_tasks: 2_base.yml
+- import_tasks: 4_base.yml
   tags: [base]
 
-- import_tasks: 3_user.yml
-  tags: [user]
+- import_tasks: 5_remove-bootstrap-user.yml
+  tags: [remove-bootstrap-user]
 
-- import_tasks: 4_sshd.yml
+- import_tasks: 6_sshd.yml
   tags: [sshd]
 
-- import_tasks: 5_timezone.yml
+- import_tasks: 7_timezone.yml
   tags: [timezone]
 
-- import_tasks: 6_net.yml
+- import_tasks: 8_net.yml
   tags: [net]
 
-- import_tasks: 7_motd.yml
+- import_tasks: 9_motd.yml
   tags: [motd]

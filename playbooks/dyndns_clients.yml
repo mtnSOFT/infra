@@ -5,7 +5,7 @@
     - name: Update apt cache (from linux_base)
       include_role:
         name: linux_base
-        tasks_from: 1_update-apt-cache
+        tasks_from: 3_update-apt-cache
 
     - name: Configure dynamic dns client
       include_role:
