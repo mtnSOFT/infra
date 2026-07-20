@@ -7,9 +7,9 @@
   ansible.builtin.lineinfile:
     path: /etc/hosts
     regexp: '^127\.0\.1\.1\b'
-    line: "127.0.1.1 {{ inventory_hostname }}.{{ local_zone_name }} {{ inventory_hostname }}"
+    line: "127.0.1.1 {{ inventory_hostname }}.{{ internal_zone_name }} {{ inventory_hostname }}"
     state: present
-  when: local_zone_name is defined
+  when: internal_zone_name is defined
 
 - name: Remove cloud-init package
   ansible.builtin.package:

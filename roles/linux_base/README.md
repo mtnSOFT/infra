@@ -8,7 +8,7 @@ bootstrap of a fresh cloud-init host.
 Bootstrap tasks (tag `bootstrap`, run once against a fresh host):
 
 - Sets the hostname from `inventory_hostname`
-- Sets the host FQDN in `/etc/hosts` from `local_zone_name` (when defined)
+- Sets the host FQDN in `/etc/hosts` from `internal_zone_name` (when defined)
 - Removes the `cloud-init` package (keeps `netplan.io`)
 - Creates the infra admin user (uid 4242, sudo, passwordless sudo)
 - Installs the SSH public keys from `inventories/<env>/ssh_keys/*.pub` into `authorized_keys`
@@ -27,7 +27,7 @@ Base tasks (run on every host):
 
 - `infra_admin_username` — admin user created during bootstrap
 - `infra_admin_password_hash` — hashed password for that user
-- `local_zone_name` — local DNS domain; when set, the host FQDN (`<hostname>.<local_zone_name>`) is written to `/etc/hosts`
+- `internal_zone_name` — internal DNS domain; when set, the host FQDN (`<hostname>.<internal_zone_name>`) is written to `/etc/hosts`
 - `sshd_port` — SSH port (default `22`)
 - `disable_ipv6` — disable IPv6 via sysctl (default `true`)
 - `timezone` — system timezone
