@@ -3,6 +3,7 @@ infra_admin_username: "test-admin"
 infra_admin_password_hash: "{{ vault_infra_admin_password_hash }}"
 ansible_user: "{{ infra_admin_username }}"
 timezone: "Europe/Zurich"
+local_zone_name: "example.local" # local DNS domain; used for the host FQDN in /etc/hosts
 arch: "amd64"
 #motd_message_url: "https://infra-git.example.com" # Uncomment and set a custom MOTD message URL if needed
 bootstrap_user: "test-bootstrap"
