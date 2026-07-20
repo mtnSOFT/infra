@@ -21,13 +21,14 @@ Base tasks (run on every host):
 - Removes the temporary bootstrap user
 - Hardens SSH: disables password auth, disables root login, sets the SSH port, locks the root password
 - Sets the timezone and (optionally) disables IPv6
+- Sets `internal_zone_name` as the default DNS search suffix (via systemd-resolved, when active)
 - Installs an Ansible-managed MOTD
 
 ## Key variables
 
 - `infra_admin_username` — admin user created during bootstrap
 - `infra_admin_password_hash` — hashed password for that user
-- `internal_zone_name` — internal DNS domain; when set, the host FQDN (`<hostname>.<internal_zone_name>`) is written to `/etc/hosts`
+- `internal_zone_name` — internal DNS domain; when set, the host FQDN (`<hostname>.<internal_zone_name>`) is written to `/etc/hosts` and used as the default DNS search suffix
 - `sshd_port` — SSH port (default `22`)
 - `disable_ipv6` — disable IPv6 via sysctl (default `true`)
 - `timezone` — system timezone
