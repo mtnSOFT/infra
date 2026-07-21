@@ -40,10 +40,11 @@
     - name: Apply default UFW rules (all hosts)
       community.general.ufw:
         rule: "{{ default_rule.rule }}"
+        route: "{{ default_rule.route | default(omit) }}"
         port: "{{ default_rule.port | default(omit) }}"
         proto: "{{ default_rule.proto | default(omit) }}"
         from_ip: "{{ default_rule.from_ip | default(omit) }}"
-        to_ip: "{{ default_rule.to_ip | default(omit) }}"
+        to_ip: "{{ default_rule.to_ip | default(default_rule.dest | default(omit)) }}"
         to_port: "{{ default_rule.to_port | default(omit) }}"
         interface: "{{ default_rule.interface | default(omit) }}"
         direction: "{{ default_rule.direction | default(omit) }}"
@@ -57,10 +58,11 @@
     - name: Apply group-specific UFW rules
       community.general.ufw:
         rule: "{{ group_rule.rule }}"
+        route: "{{ group_rule.route | default(omit) }}"
         port: "{{ group_rule.port | default(omit) }}"
         proto: "{{ group_rule.proto | default(omit) }}"
         from_ip: "{{ group_rule.from_ip | default(omit) }}"
-        to_ip: "{{ group_rule.to_ip | default(omit) }}"
+        to_ip: "{{ group_rule.to_ip | default(group_rule.dest | default(omit)) }}"
         to_port: "{{ group_rule.to_port | default(omit) }}"
         interface: "{{ group_rule.interface | default(omit) }}"
         direction: "{{ group_rule.direction | default(omit) }}"
@@ -74,10 +76,11 @@
     - name: Apply host-specific UFW rules
       community.general.ufw:
         rule: "{{ host_rule.rule }}"
+        route: "{{ host_rule.route | default(omit) }}"
         port: "{{ host_rule.port | default(omit) }}"
         proto: "{{ host_rule.proto | default(omit) }}"
         from_ip: "{{ host_rule.from_ip | default(omit) }}"
-        to_ip: "{{ host_rule.to_ip | default(omit) }}"
+        to_ip: "{{ host_rule.to_ip | default(host_rule.dest | default(omit)) }}"
         to_port: "{{ host_rule.to_port | default(omit) }}"
         interface: "{{ host_rule.interface | default(omit) }}"
         direction: "{{ host_rule.direction | default(omit) }}"

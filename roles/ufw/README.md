@@ -27,6 +27,14 @@ Configures the UFW firewall: default policies, rules and (optional) NAT masquera
 
 ## Defining rules
 
+Each rule entry supports: `rule` (`allow`/`deny`/`reject`/`limit`), `route` (bool —
+apply to the FORWARD chain instead of INPUT, i.e. `ufw route ...`), `port`, `proto`,
+`from_ip`, `to_ip` (alias: `dest`), `to_port`, `interface`, `direction`, `comment`.
+
+Use `route: true` for traffic **passing through** the router (e.g. VPN clients
+reaching a LAN). Plain rules only match traffic **to the router itself** (INPUT);
+they never filter forwarded traffic.
+
 Defaults live in `roles/ufw/defaults/main.yml`. Override per scope in your inventory:
 
 **Group rules** — e.g. `inventories/production/group_vars/linux_routers/vars.yml`:
