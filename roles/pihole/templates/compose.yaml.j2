@@ -23,6 +23,10 @@ services:
       # No interface set: listen on all interfaces.
       FTLCONF_dns_listeningMode: "all"
 {% endif %}
+{% if (pihole_web_ip | default('')) | length > 0 %}
+      # Bind the web admin to this IP only (80 -> redirect to TLS, 443 = TLS).
+      FTLCONF_webserver_port: "{{ pihole_web_ip }}:80o,{{ pihole_web_ip }}:443os"
+{% endif %}
       # Services we don't run: embedded NTP server + time sync, and DHCP server
       FTLCONF_ntp_ipv4_active: "false"
       FTLCONF_ntp_ipv6_active: "false"

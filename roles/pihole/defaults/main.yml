@@ -10,3 +10,7 @@ pihole_dir: "/containers/pihole"
 # interfaces. Set to one interface (e.g. wg0) to bind only that one, so Pi-hole
 # can share :53 with another resolver on a different interface.
 pihole_dns_interface: ""
+
+# IP the web admin (80/443) binds to. Empty = all interfaces. FTL's web server
+# binds by IP, not interface — e.g. wg0's address 10.10.0.1.
+pihole_web_ip: ""
