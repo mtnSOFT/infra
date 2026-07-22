@@ -10,11 +10,14 @@ role to have installed Docker Engine and the Compose plugin first.
 - Renders `.env` (admin password, `0600`) and `compose.yaml`
 - Brings the stack up with `docker compose` (via `community.docker.docker_compose_v2`), pulling the latest image for the configured tag
 
-The container uses **default (bridge) networking** and publishes only the
-DNS and web-admin ports via the compose `ports:` directive:
+The container uses **host networking** (`network_mode: host`), so FTL binds the
+host's interfaces directly — DNS arrives as INPUT traffic and is governed by the
+host firewall (no DNAT / published ports for UFW-managed NAT to clobber).
 
-- `53/tcp` + `53/udp` — DNS
-- `80/tcp` + `443/tcp` — web admin (HTTP + HTTPS)
+By default it listens on all interfaces. Set `pihole_dns_interface` to bind a
+single interface only (e.g. `wg0`) — this avoids the wildcard, so Pi-hole can
+share `:53` with another resolver bound to a different interface (that resolver
+must also not bind `0.0.0.0:53`).
 
 The embedded NTP server/sync and the DHCP server are disabled — this is a
 DNS resolver with the web admin only. Persistent data (config, gravity and
@@ -28,21 +31,8 @@ query databases) lives in `{{ pihole_dir }}/etc-pihole`.
 - `pihole_image` — image repository (default `pihole/pihole`)
 - `pihole_version_tag` — image tag (default `latest`)
 - `pihole_dir` — compose project directory (default `/containers/pihole`)
-- `pihole_dns_listen_ip` — host IP the DNS ports (53/tcp+udp) are published on
-  (default `0.0.0.0`, i.e. all interfaces)
-- `pihole_web_listen_ip` — host IP the web-admin ports (80/443) are published on
-  (default `0.0.0.0`, i.e. all interfaces)
-
-Set either to a specific IP to publish that protocol on a single interface only.
-Either variable may also be a **list of IPs** to publish that protocol on
-several interfaces at once — each IP gets its own set of port mappings in the
-generated compose file:
-
-```yaml
-pihole_dns_listen_ip:
-  - "10.0.0.1"
-  - "192.168.1.1"
-```
+- `pihole_dns_interface` — interface FTL binds DNS on; empty (default) = all
+  interfaces, or e.g. `wg0` to bind only that one
 
 ## Usage
 

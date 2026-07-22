@@ -1,35 +1,33 @@
 # Ansible managed
-{% set pihole_dns_listen_ips = [pihole_dns_listen_ip] if pihole_dns_listen_ip is string else pihole_dns_listen_ip %}
-{% set pihole_web_listen_ips = [pihole_web_listen_ip] if pihole_web_listen_ip is string else pihole_web_listen_ip %}
 services:
   pihole:
     container_name: pihole
     image: {{ pihole_image }}:{{ pihole_version_tag }}
+    # Host networking: FTL binds host interfaces directly (no DNAT / published
+    # ports), so DNS is INPUT traffic governed by the host firewall.
+    network_mode: host
     environment:
       TZ: "{{ timezone | default('UTC') }}"
       # Admin/API password (interpolated from the .env file next to this compose)
       FTLCONF_webserver_api_password: "${PIHOLE_WEBPASSWORD}"
       # Upstream resolvers
       FTLCONF_dns_upstreams: "{{ dns1 }};{{ dns2 }}"
-      # Bridge networking: queries reach FTL via the Docker gateway, so accept on
-      # all interfaces. Exposure is controlled by the published ports below.
+{% if (pihole_dns_interface | default('')) | length > 0 %}
+      # Listen only on this interface (bind-dynamic = no wildcard), so Pi-hole can
+      # share :53 with another resolver bound to a different interface.
+      FTLCONF_dns_listeningMode: "NONE"
+      FTLCONF_misc_dnsmasq_lines: |-
+        bind-dynamic
+        interface={{ pihole_dns_interface }}
+{% else %}
+      # No interface set: listen on all interfaces.
       FTLCONF_dns_listeningMode: "all"
+{% endif %}
       # Services we don't run: embedded NTP server + time sync, and DHCP server
       FTLCONF_ntp_ipv4_active: "false"
       FTLCONF_ntp_ipv6_active: "false"
       FTLCONF_ntp_sync_active: "false"
       FTLCONF_dhcp_active: "false"
-    ports:
-      # DNS (53/tcp+udp)
-{% for ip in pihole_dns_listen_ips %}
-      - "{{ ip }}:53:53/tcp"
-      - "{{ ip }}:53:53/udp"
-{% endfor %}
-      # Web admin (HTTP + HTTPS)
-{% for ip in pihole_web_listen_ips %}
-      - "{{ ip }}:80:80/tcp"
-      - "{{ ip }}:443:443/tcp"
-{% endfor %}
     volumes:
       - "{{ pihole_dir }}/etc-pihole:/etc/pihole"
     cap_add:
