@@ -12,13 +12,18 @@ services:
       FTLCONF_webserver_api_password: "${PIHOLE_WEBPASSWORD}"
       # Upstream resolvers
       FTLCONF_dns_upstreams: "{{ dns1 }};{{ dns2 }}"
-{% if (pihole_dns_interface | default('')) | length > 0 %}
-      # Listen only on this interface (bind-dynamic = no wildcard), so Pi-hole can
-      # share :53 with another resolver bound to a different interface.
+{% set _raw_ifaces = pihole_dns_interface | default('') %}
+{% set _pihole_ifaces = _raw_ifaces if (_raw_ifaces is not string) else ([_raw_ifaces] if _raw_ifaces else []) %}
+{% if (_pihole_ifaces | length) > 0 %}
+      # Listen only on these interfaces (bind-dynamic = no wildcard), so Pi-hole
+      # can share :53 with another resolver bound to a different interface.
+      # Multiple entries let it answer on e.g. the LAN iface *and* wg0 (VPN).
       FTLCONF_dns_listeningMode: "NONE"
       FTLCONF_misc_dnsmasq_lines: |-
         bind-dynamic
-        interface={{ pihole_dns_interface }}
+{% for _iface in _pihole_ifaces %}
+        interface={{ _iface }}
+{% endfor %}
 {% else %}
       # No interface set: listen on all interfaces.
       FTLCONF_dns_listeningMode: "all"

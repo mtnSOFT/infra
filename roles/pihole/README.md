@@ -14,10 +14,12 @@ The container uses **host networking** (`network_mode: host`), so FTL binds the
 host's interfaces directly — DNS arrives as INPUT traffic and is governed by the
 host firewall (no DNAT / published ports for UFW-managed NAT to clobber).
 
-By default it listens on all interfaces. Set `pihole_dns_interface` to bind a
-single interface only (e.g. `wg0`) — this avoids the wildcard, so Pi-hole can
-share `:53` with another resolver bound to a different interface (that resolver
-must also not bind `0.0.0.0:53`). Set `pihole_web_ip` to bind the web admin
+By default it listens on all interfaces. Set `pihole_dns_interface` to bind
+specific interfaces only — a single one (e.g. `wg0`) or a list (e.g.
+`["eth1", "wg0"]`). This avoids the wildcard, so Pi-hole can share `:53` with
+another resolver bound to a different interface (that resolver must also not
+bind `0.0.0.0:53`). Use a list to answer on a LAN interface *and* WireGuard
+clients on `wg0` at the same time. Set `pihole_web_ip` to bind the web admin
 (80/443) to one IP too (FTL's web server binds by IP, not interface).
 
 The embedded NTP server/sync and the DHCP server are disabled — this is a
@@ -32,8 +34,9 @@ query databases) lives in `{{ pihole_dir }}/etc-pihole`.
 - `pihole_image` — image repository (default `pihole/pihole`)
 - `pihole_version_tag` — image tag (default `latest`)
 - `pihole_dir` — compose project directory (default `/containers/pihole`)
-- `pihole_dns_interface` — interface FTL binds DNS on; empty (default) = all
-  interfaces, or e.g. `wg0` to bind only that one
+- `pihole_dns_interface` — interface(s) FTL binds DNS on; empty (default) = all
+  interfaces, e.g. `wg0` to bind only that one, or a list like `["eth1", "wg0"]`
+  to answer on several (e.g. a LAN interface *and* WireGuard clients)
 - `pihole_web_ip` — IP the web admin (80/443) binds to; empty (default) = all
   interfaces, or e.g. `10.10.0.1`
 
