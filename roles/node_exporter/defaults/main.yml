@@ -1,0 +1,12 @@
+---
+# Port the exporter listens on. Prometheus scrapes /metrics here.
+node_exporter_port: 9100
+
+# Address to bind. Empty = all interfaces. Set an internal IP (e.g. the host's
+# server LAN address) to keep the exporter off any public interface - unlike the
+# monitoring stack's docker-published ports, this is a plain systemd service, so
+# UFW governs it too.
+node_exporter_bind_ip: ""
+
+# Extra flags appended to ARGS, e.g. ["--collector.systemd"].
+node_exporter_extra_args: []

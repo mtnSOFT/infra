@@ -1,0 +1,13 @@
+---
+# The distro package ships the systemd unit and a `prometheus` service user, and
+# is kept patched by the unattended-upgrades that linux_base enables.
+- name: Install Prometheus node exporter
+  ansible.builtin.package:
+    name: prometheus-node-exporter
+    state: present
+
+- name: Ensure node exporter is started and enabled
+  ansible.builtin.systemd:
+    name: prometheus-node-exporter
+    state: started
+    enabled: true

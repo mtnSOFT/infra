@@ -1,0 +1,12 @@
+---
+# The packaged unit is ExecStart=/usr/bin/prometheus-node-exporter $ARGS with
+# EnvironmentFile=/etc/default/prometheus-node-exporter, so setting ARGS is all
+# that is needed - no systemd drop-in, and the unit itself stays untouched.
+- name: Configure node exporter arguments
+  ansible.builtin.template:
+    src: prometheus-node-exporter.j2
+    dest: /etc/default/prometheus-node-exporter
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart node exporter

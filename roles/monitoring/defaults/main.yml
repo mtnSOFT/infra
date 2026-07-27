@@ -37,8 +37,14 @@ monitoring_prometheus_evaluation_interval: "30s"
 # Labels attached to every scraped series and to alerts sent to Alertmanager
 monitoring_prometheus_external_labels: {}
 
-# Extra Prometheus scrape jobs, appended verbatim to scrape_configs. This is
-# where the node exporters go once they are rolled out.
+# Inventory group whose hosts are scraped as node exporters. Every host in this
+# group becomes a target in the `node` job automatically - see the node_exporter
+# role. Set to a non-existent group name to disable the job.
+monitoring_node_group: "monitored"
+monitoring_node_exporter_port: 9100
+
+# Extra Prometheus scrape jobs, appended verbatim to scrape_configs, for anything
+# that is not derived from the inventory.
 monitoring_prometheus_extra_scrape_configs: []
 
 # Grafana admin account. The password is intentionally not defaulted - define

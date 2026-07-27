@@ -12,3 +12,6 @@ testhost-ubuntu-24.04
 
 [monitoring]
 testhost-ubuntu-24.04
+
+[monitored]
+testhost-ubuntu-24.04

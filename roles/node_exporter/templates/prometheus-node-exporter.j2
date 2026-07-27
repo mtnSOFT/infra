@@ -1,0 +1,2 @@
+# Ansible managed - read by prometheus-node-exporter.service as $ARGS
+ARGS="--web.listen-address={{ node_exporter_bind_ip }}:{{ node_exporter_port }}{% for arg in node_exporter_extra_args %} {{ arg }}{% endfor %}"
