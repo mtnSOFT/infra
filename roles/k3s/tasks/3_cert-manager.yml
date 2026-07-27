@@ -83,8 +83,8 @@
             isCA: true
             commonName: "Internal Root CA"
             secretName: "internal-ca"
-            duration: 87600h  # 10 years
-            renewBefore: 8760h  # 1 year
+            duration: 87600h # 10 years
+            renewBefore: 8760h # 1 year
             privateKey:
               algorithm: RSA
               encoding: PKCS1

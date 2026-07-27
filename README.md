@@ -17,19 +17,20 @@ directory structure:
 
 ## Roles
 
-| Role | Description |
-| --- | --- |
-| [docker-compose](roles/docker-compose/README.md) | Docker Engine + Compose plugin from the official apt repo |
-| [dyndns_client](roles/dyndns_client/README.md) | Keeps a dynamic DNS record up to date via cron |
-| [k3s](roles/k3s/README.md) | k3s Kubernetes cluster with cert-manager + ArgoCD |
-| [linux_base](roles/linux_base/README.md) | Base configuration + first-run bootstrap for every host |
-| [linux_router](roles/linux_router/README.md) | Turns a host into a router/gateway |
-| [netplan](roles/netplan/README.md) | Deploys per-host netplan network config |
-| [pihole](roles/pihole/README.md) | Pi-hole DNS sinkhole / ad blocker |
-| [postgresql](roles/postgresql/README.md) | PostgreSQL 17 server |
-| [powerdns](roles/powerdns/README.md) | Authoritative PowerDNS server + Recursor (resolves outside the local zone) |
-| [ufw](roles/ufw/README.md) | UFW firewall: policies, rules and WireGuard NAT |
-| [wireguard](roles/wireguard/README.md) | WireGuard VPN server + client config generation |
+| Role                                             | Description                                                                |
+|--------------------------------------------------|----------------------------------------------------------------------------|
+| [docker-compose](roles/docker-compose/README.md) | Docker Engine + Compose plugin from the official apt repo                  |
+| [dyndns_client](roles/dyndns_client/README.md)   | Keeps a dynamic DNS record up to date via cron                             |
+| [k3s](roles/k3s/README.md)                       | k3s Kubernetes cluster with cert-manager + ArgoCD                          |
+| [linux_base](roles/linux_base/README.md)         | Base configuration + first-run bootstrap for every host                    |
+| [linux_router](roles/linux_router/README.md)     | Turns a host into a router/gateway                                         |
+| [monitoring](roles/monitoring/README.md)         | Prometheus + Grafana + Alertmanager as a Docker Compose stack              |
+| [netplan](roles/netplan/README.md)               | Deploys per-host netplan network config                                    |
+| [pihole](roles/pihole/README.md)                 | Pi-hole DNS sinkhole / ad blocker                                          |
+| [postgresql](roles/postgresql/README.md)         | PostgreSQL 17 server                                                       |
+| [powerdns](roles/powerdns/README.md)             | Authoritative PowerDNS server + Recursor (resolves outside the local zone) |
+| [ufw](roles/ufw/README.md)                       | UFW firewall: policies, rules and WireGuard NAT                            |
+| [wireguard](roles/wireguard/README.md)           | WireGuard VPN server + client config generation                            |
 
 ## Getting Started
 

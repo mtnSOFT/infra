@@ -9,39 +9,39 @@
 
 - name: Install required dependencies
   package:
-    name:  
+    name:
       - curl
       - apt-transport-https
     state: present
 
 - name: Download k3s installation script
-  get_url:  
+  get_url:
     url: https://get.k3s.io
     dest: /tmp/k3s-install.sh
-    mode: '0755'
+    mode: "0755"
 
 - name: Install k3s on first server (master)
   shell: "/tmp/k3s-install.sh"
   args:
-    creates:  /usr/local/bin/k3s
+    creates: /usr/local/bin/k3s
   environment:
     INSTALL_K3S_EXEC: "server --cluster-init --flannel-backend=host-gw"
   when: inventory_hostname == k3s_master
 
 - name: Wait for k3s to be ready on master
-  wait_for: 
+  wait_for:
     path: "{{ k3s_token_file }}"
-    timeout:  60
+    timeout: 60
   when: inventory_hostname == k3s_master
 
 - name: Read k3s token from master
   delegate_to: "{{ k3s_master }}"
   slurp:
     src: "{{ k3s_token_file }}"
-  register:  k3s_token
+  register: k3s_token
 
 - name: Store k3s token as fact
-  set_fact: 
+  set_fact:
     k3s_cluster_token: "{{ k3s_token.content | b64decode | trim }}"
 
 - name: Install k3s on agent nodes
@@ -52,23 +52,23 @@
     K3S_URL: "https://{{ k3s_master_ip }}:6443"
     K3S_TOKEN: "{{ k3s_cluster_token }}"
     INSTALL_K3S_EXEC: "agent"
-  when: 
+  when:
     - inventory_hostname != k3s_master
 
-- name:  Ensure k3s service is enabled and started
+- name: Ensure k3s service is enabled and started
   systemd:
     name: k3s
     enabled: yes
     state: started
-  when: 
+  when:
     - inventory_hostname == k3s_master
 
-- name:  Ensure k3s-agent service is enabled and started
+- name: Ensure k3s-agent service is enabled and started
   systemd:
     name: k3s-agent
     enabled: yes
     state: started
-  when: 
+  when:
     - inventory_hostname != k3s_master
 
 - name: Get k3s version
@@ -77,10 +77,10 @@
   changed_when: false
 
 - name: Display k3s version
-  debug: 
+  debug:
     msg: "{{ k3s_version.stdout }}"
 
-- name:  Get cluster nodes
+- name: Get cluster nodes
   delegate_to: "{{ k3s_master }}"
   command: kubectl get nodes
   environment:
@@ -89,5 +89,5 @@
   changed_when: false
 
 - name: Show cluster nodes
-  debug: 
+  debug:
     msg: "{{ cluster_nodes.stdout_lines }}"

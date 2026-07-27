@@ -2,6 +2,6 @@
 - name: Converge
   hosts: wireguard
   become: yes
-  
+
   roles:
     - role: wireguard

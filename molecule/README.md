@@ -1,6 +1,6 @@
 # Molecule tests
 
-as test container ghcr.io/mtnsoft/infra-test-ubuntu:24.04 is used. (see https://github.com/mtnsoft/infra-test-ubuntu)
+as test container ghcr.io/mtnsoft/infra-test-ubuntu:24.04 is used. (see <https://github.com/mtnsoft/infra-test-ubuntu>)
 
 ## Inventory
 
