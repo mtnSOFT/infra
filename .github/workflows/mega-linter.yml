@@ -1,16 +1,17 @@
 name: MegaLinter
 
-# Trigger mega-linter at every push. Action will also be visible from
-# Pull Requests to main
+# Lint pushes to main and every pull request (same trigger set as molecule.yml).
+#
+# push is restricted to main on purpose: an unfiltered "push:" runs this
+# workflow twice for a feature branch that has an open PR - once for the push
+# and once for the pull_request event.
 on:
-  # Comment this line to trigger action only on pull-requests
-  # (not recommended if you don't pay for GH Actions)
   push:
+    branches: [main]
 
   pull_request:
-    branches:
-      - main
-      - master
+
+  workflow_dispatch: {}
 
 permissions:
   contents: read
@@ -29,7 +30,10 @@ env:
 
   # Decide which event triggers application of fixes in a commit or a PR
   # (pull_request, push, all)
-  APPLY_FIXES_EVENT: pull_request
+  #
+  # 'all' so fixes are proposed both for pull requests (targeting the PR's own
+  # branch) and for pushes to main.
+  APPLY_FIXES_EVENT: all
 
   # If APPLY_FIXES is used, defines if the fixes are directly committed (commit)
   # or posted in a PR (pull_request)
@@ -44,6 +48,12 @@ jobs:
     name: MegaLinter
     runs-on: ubuntu-latest
 
+    env:
+      # Branch this run belongs to and against which fixes are proposed: the
+      # PR's own head branch on pull_request events, the pushed branch (main)
+      # otherwise.
+      TARGET_BRANCH: ${{ github.event.pull_request.head.ref || github.ref_name }}
+
     # Give the default GITHUB_TOKEN write permission to commit and push, comment
     # issues, and post new Pull Requests; remove the ones you do not need
     permissions:
@@ -57,6 +67,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.PAT || secrets.GITHUB_TOKEN }}
+
+          # On pull_request events the default checkout is the merge ref
+          # (PR branch + main). Check out the PR head instead so applied fixes
+          # are based on the branch itself and the fix PR does not drag in
+          # commits from main.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
           # If you use VALIDATE_ALL_CODEBASE = true, you can remove this line to
           # improve performance
@@ -133,12 +149,17 @@ jobs:
           !contains(github.event.head_commit.message, 'skip fix')
         with:
           token: ${{ secrets.PAT || secrets.GITHUB_TOKEN }}
-          # On pull_request events the checkout is a detached HEAD (the merge
-          # ref), so create-pull-request cannot infer the target branch and
-          # errors unless 'base' is supplied. Fall back to the pushed branch.
-          base: ${{ github.event.pull_request.base.ref || github.ref_name }}
+          # The checkout above is a detached HEAD, so create-pull-request cannot
+          # infer the target branch and errors unless 'base' is supplied.
+          # Using github.event.pull_request.base.ref here would open the fix PR
+          # against main even though the fixes belong to the feature branch.
+          base: ${{ env.TARGET_BRANCH }}
+          # One fix branch per target branch - the default shared branch name
+          # would make concurrent feature branches overwrite each other's fixes.
+          branch: megalinter-fixes/${{ env.TARGET_BRANCH }}
+          delete-branch: true
           commit-message: "[MegaLinter] Apply linters automatic fixes"
-          title: "[MegaLinter] Apply linters automatic fixes"
+          title: "[MegaLinter] Apply fixes for ${{ env.TARGET_BRANCH }}"
           labels: bot
 
       - name: Create PR output
