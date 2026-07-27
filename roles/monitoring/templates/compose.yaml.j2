@@ -5,9 +5,12 @@
 # ports are bound to an explicit host IP, never the wildcard: docker publishes
 # via DNAT and bypasses UFW's INPUT chain, so the bind address is the access
 # control.
+#
+# No container_name: that would claim a global docker name and collide with any
+# container of the same name outside this project. Compose names them
+# monitoring-<service>-1 instead.
 services:
   prometheus:
-    container_name: prometheus
     image: {{ monitoring_prometheus_image }}:{{ monitoring_prometheus_version_tag }}
     user: "{{ monitoring_nobody_uid }}:{{ monitoring_nobody_gid }}"
     command:
@@ -25,7 +28,6 @@ services:
     restart: unless-stopped
 
   alertmanager:
-    container_name: alertmanager
     image: {{ monitoring_alertmanager_image }}:{{ monitoring_alertmanager_version_tag }}
     user: "{{ monitoring_nobody_uid }}:{{ monitoring_nobody_gid }}"
     command:
@@ -41,7 +43,6 @@ services:
     restart: unless-stopped
 
   grafana:
-    container_name: grafana
     image: {{ monitoring_grafana_image }}:{{ monitoring_grafana_version_tag }}
     user: "{{ monitoring_grafana_uid }}:{{ monitoring_grafana_gid }}"
     depends_on:

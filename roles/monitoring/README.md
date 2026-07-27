@@ -24,8 +24,11 @@ Prometheus, Grafana and Alertmanager as one Docker Compose stack. Needs the
   config. Set `monitoring_alertmanager_receivers`, secrets in vault —
   `alertmanager.yml` is rendered `0640` because Alertmanager cannot read env vars.
 - **Password changes do not apply.** Grafana reads `GF_SECURITY_ADMIN_PASSWORD`
-  only when initialising its DB. Reset with
-  `docker exec -it grafana grafana cli admin reset-admin-password '<new>'`.
+  only when initialising its DB. Reset with `docker compose -f
+  {{ monitoring_dir }}/compose.yaml exec grafana grafana cli admin
+  reset-admin-password '<new>'`.
+- Containers are named by compose (`monitoring-grafana-1`, …), so address them
+  with `docker compose exec <service>` rather than a fixed container name.
 - Alert rules are wired up (`/etc/prometheus/rules/*.yml`) but ship empty.
 - Dashboards: commit JSON to `files/dashboards/`; UI edits are not persisted.
 - Exporters are not included yet — add scrape jobs via
