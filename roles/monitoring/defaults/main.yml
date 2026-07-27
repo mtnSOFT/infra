@@ -1,0 +1,77 @@
+---
+# Where the compose project and all persistent bind mounts live
+monitoring_dir: "/containers/monitoring"
+
+# Bring the stack up with `docker compose` and restart services when their
+# config changes. Set false to render the configuration only - that is what the
+# molecule scenario does, since the test container has no docker daemon.
+monitoring_deploy: true
+
+# Container images and tags, one pair per service. `latest` matches the repo
+# convention, but pin these in inventory: a Grafana or Prometheus major bump
+# can break provisioned dashboards and stored data.
+monitoring_prometheus_image: "prom/prometheus"
+monitoring_prometheus_version_tag: "latest"
+monitoring_grafana_image: "grafana/grafana"
+monitoring_grafana_version_tag: "latest"
+monitoring_alertmanager_image: "prom/alertmanager"
+monitoring_alertmanager_version_tag: "latest"
+
+# Host IP the published ports bind to. Docker's published ports are DNAT'd and
+# bypass UFW's INPUT chain, so this binding - not the firewall - is what limits
+# who can reach the stack. Keep Prometheus and Alertmanager on loopback and
+# bind Grafana to an internal address (e.g. wg0's) to make the UI VPN-only.
+monitoring_bind_ip: "127.0.0.1"
+monitoring_grafana_bind_ip: "{{ monitoring_bind_ip }}"
+
+# Host ports the services are published on
+monitoring_prometheus_port: 9090
+monitoring_grafana_port: 3000
+monitoring_alertmanager_port: 9093
+
+# Prometheus TSDB retention and default scrape cadence
+monitoring_prometheus_retention: "30d"
+monitoring_prometheus_scrape_interval: "30s"
+monitoring_prometheus_evaluation_interval: "30s"
+
+# Labels attached to every scraped series and to alerts sent to Alertmanager
+monitoring_prometheus_external_labels: {}
+
+# Extra Prometheus scrape jobs, appended verbatim to scrape_configs. This is
+# where the node exporters go once they are rolled out.
+monitoring_prometheus_extra_scrape_configs: []
+
+# Grafana admin account. The password is intentionally not defaulted - define
+# monitoring_grafana_admin_password in vault.
+monitoring_grafana_admin_user: "admin"
+monitoring_grafana_root_url: "http://localhost:{{ monitoring_grafana_port }}"
+
+# Alertmanager routing. The default receiver has no notification config, which
+# is valid and silently drops alerts - replace it once a channel is chosen.
+monitoring_alertmanager_default_receiver: "default"
+monitoring_alertmanager_receivers:
+  - name: "default"
+monitoring_alertmanager_routes: []
+monitoring_alertmanager_inhibit_rules: []
+monitoring_alertmanager_group_by: ["alertname", "instance"]
+monitoring_alertmanager_group_wait: "30s"
+monitoring_alertmanager_group_interval: "5m"
+monitoring_alertmanager_repeat_interval: "4h"
+
+# Rendered verbatim as Alertmanager's `global:` block - this is where shared
+# notification settings go (smtp_smarthost, smtp_from, slack_api_url, ...).
+# Anything sensitive belongs in vault; the rendered file is 0640.
+monitoring_alertmanager_global:
+  resolve_timeout: "5m"
+
+# UID/GID the upstream images run as. The data directories are chowned to these
+# and the same values are pinned as `user:` on the compose services, so the two
+# ends cannot drift apart.
+# Grafana's image runs as uid 472 in the root group and chowns its own paths to
+# `grafana:root`, so keep the gid at 0 - a non-root gid can lose access to
+# group-root files inside the image.
+monitoring_grafana_uid: 472
+monitoring_grafana_gid: 0
+# prom/prometheus and prom/alertmanager run as nobody:nobody.
+monitoring_nobody_uid: 65534
+monitoring_nobody_gid: 65534

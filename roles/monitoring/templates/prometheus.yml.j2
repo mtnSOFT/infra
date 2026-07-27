@@ -1,0 +1,25 @@
+# Ansible managed
+global:
+  scrape_interval: {{ monitoring_prometheus_scrape_interval }}
+  evaluation_interval: {{ monitoring_prometheus_evaluation_interval }}
+{% if monitoring_prometheus_external_labels %}
+  external_labels:
+{{ monitoring_prometheus_external_labels | to_nice_yaml(indent=2) | trim | indent(4, true) }}
+{% endif %}
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
+# Ships empty. Drop rule files into {{ monitoring_dir }}/prometheus/rules to use.
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+{% if monitoring_prometheus_extra_scrape_configs %}
+{{ monitoring_prometheus_extra_scrape_configs | to_nice_yaml(indent=2) | trim | indent(2, true) }}
+{% endif %}

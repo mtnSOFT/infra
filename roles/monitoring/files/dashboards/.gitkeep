@@ -1,0 +1,2 @@
+# Drop Grafana dashboard JSON exports here; 1_prep.yml copies *.json to the
+# host and Grafana's file provider picks them up automatically.

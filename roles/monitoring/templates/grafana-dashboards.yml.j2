@@ -1,0 +1,14 @@
+# Ansible managed
+apiVersion: 1
+providers:
+  - name: default
+    orgId: 1
+    type: file
+    # Dashboards are managed in git (roles/monitoring/files/dashboards), so
+    # editing them in the UI would be overwritten on the next run.
+    allowUiUpdates: false
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    options:
+      path: /etc/grafana/dashboards
+      foldersFromFilesStructure: true

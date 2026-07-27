@@ -1,0 +1,24 @@
+---
+# docker_compose_v2 recreates containers when compose.yaml changes, but it does
+# not notice edits to bind-mounted config files - those need an explicit
+# restart of the affected service.
+- name: Restart prometheus
+  community.docker.docker_compose_v2:
+    project_src: "{{ monitoring_dir }}"
+    state: restarted
+    services: [prometheus]
+  when: monitoring_deploy | bool
+
+- name: Restart alertmanager
+  community.docker.docker_compose_v2:
+    project_src: "{{ monitoring_dir }}"
+    state: restarted
+    services: [alertmanager]
+  when: monitoring_deploy | bool
+
+- name: Restart grafana
+  community.docker.docker_compose_v2:
+    project_src: "{{ monitoring_dir }}"
+    state: restarted
+    services: [grafana]
+  when: monitoring_deploy | bool

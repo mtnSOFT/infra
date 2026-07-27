@@ -1,0 +1,12 @@
+# Ansible managed
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    # Service name on the compose bridge network, not the published host port.
+    url: "http://prometheus:9090"
+    isDefault: true
+    jsonData:
+      timeInterval: "{{ monitoring_prometheus_scrape_interval }}"

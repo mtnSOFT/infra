@@ -1,0 +1,30 @@
+---
+# monitoring_grafana_admin_password comes from the test inventory's vault
+# (inventories/test/group_vars/monitoring/), so this exercises the same
+# vault_* indirection production uses.
+- name: Converge
+  hosts: all
+  become: true
+  vars:
+    # The test container has no docker daemon, so the stack is not brought up -
+    # this scenario verifies the rendered configuration, which is where the
+    # role's logic lives.
+    monitoring_deploy: false
+    # Non-default bind addresses so the port mappings are actually asserted.
+    monitoring_bind_ip: "127.0.0.1"
+    monitoring_grafana_bind_ip: "10.10.0.1"
+    # Exercise the optional template branches: external labels, extra scrape
+    # jobs and a second Alertmanager receiver.
+    monitoring_prometheus_external_labels:
+      cluster: molecule
+    monitoring_prometheus_extra_scrape_configs:
+      - job_name: node
+        static_configs:
+          - targets: ["10.0.0.10:9100"]
+    monitoring_alertmanager_receivers:
+      - name: "default"
+      - name: "ntfy"
+        webhook_configs:
+          - url: "https://ntfy.example.com/alerts"
+  roles:
+    - monitoring

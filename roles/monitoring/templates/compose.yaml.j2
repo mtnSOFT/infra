@@ -1,0 +1,64 @@
+# Ansible managed
+#
+# The services share the compose project's default bridge network and address
+# each other by service name (grafana -> http://prometheus:9090). Published
+# ports are bound to an explicit host IP, never the wildcard: docker publishes
+# via DNAT and bypasses UFW's INPUT chain, so the bind address is the access
+# control.
+#
+# No container_name: that would claim a global docker name and collide with any
+# container of the same name outside this project. Compose names them
+# monitoring-<service>-1 instead.
+services:
+  prometheus:
+    image: {{ monitoring_prometheus_image }}:{{ monitoring_prometheus_version_tag }}
+    user: "{{ monitoring_nobody_uid }}:{{ monitoring_nobody_gid }}"
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time={{ monitoring_prometheus_retention }}
+    environment:
+      TZ: "{{ timezone | default('UTC') }}"
+    volumes:
+      - "{{ monitoring_dir }}/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro"
+      - "{{ monitoring_dir }}/prometheus/rules:/etc/prometheus/rules:ro"
+      - "{{ monitoring_dir }}/prometheus/data:/prometheus"
+    ports:
+      - "{{ monitoring_bind_ip }}:{{ monitoring_prometheus_port }}:9090"
+    restart: unless-stopped
+
+  alertmanager:
+    image: {{ monitoring_alertmanager_image }}:{{ monitoring_alertmanager_version_tag }}
+    user: "{{ monitoring_nobody_uid }}:{{ monitoring_nobody_gid }}"
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    environment:
+      TZ: "{{ timezone | default('UTC') }}"
+    volumes:
+      - "{{ monitoring_dir }}/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro"
+      - "{{ monitoring_dir }}/alertmanager/data:/alertmanager"
+    ports:
+      - "{{ monitoring_bind_ip }}:{{ monitoring_alertmanager_port }}:9093"
+    restart: unless-stopped
+
+  grafana:
+    image: {{ monitoring_grafana_image }}:{{ monitoring_grafana_version_tag }}
+    user: "{{ monitoring_grafana_uid }}:{{ monitoring_grafana_gid }}"
+    depends_on:
+      - prometheus
+    environment:
+      TZ: "{{ timezone | default('UTC') }}"
+      GF_SECURITY_ADMIN_USER: "{{ monitoring_grafana_admin_user }}"
+      GF_SECURITY_ADMIN_PASSWORD: "${GF_SECURITY_ADMIN_PASSWORD}"
+      GF_SERVER_ROOT_URL: "{{ monitoring_grafana_root_url }}"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    volumes:
+      - "{{ monitoring_dir }}/grafana/provisioning:/etc/grafana/provisioning:ro"
+      - "{{ monitoring_dir }}/grafana/dashboards:/etc/grafana/dashboards:ro"
+      - "{{ monitoring_dir }}/grafana/data:/var/lib/grafana"
+    ports:
+      - "{{ monitoring_grafana_bind_ip }}:{{ monitoring_grafana_port }}:3000"
+    restart: unless-stopped

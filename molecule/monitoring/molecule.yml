@@ -1,0 +1,22 @@
+---
+driver:
+  name: podman
+platforms:
+  - name: testhost-ubuntu-24.04
+    image: ghcr.io/mtnsoft/infra-test-ubuntu:24.04
+    pre_build_image: true
+verifier:
+  name: testinfra
+  options:
+    # The rendered .env is 0600 root:root and the data dirs are 0750
+    sudo: true
+provisioner:
+  name: ansible
+  env:
+    ANSIBLE_ROLES_PATH: "../../roles"
+    ANSIBLE_VAULT_PASSWORD_FILE: "../.ansible_vault_pass.txt"
+  inventory:
+    links:
+      group_vars: "../../inventories/test/group_vars/"
+      host_vars: "../../inventories/test/host_vars/"
+      hosts: "../../inventories/test/hosts"

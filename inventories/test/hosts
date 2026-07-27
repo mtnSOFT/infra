@@ -6,3 +6,6 @@ testhost-ubuntu-24.04
 
 [powerdns]
 testhost-ubuntu-24.04
+
+[monitoring]
+testhost-ubuntu-24.04
