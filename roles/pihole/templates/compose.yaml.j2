@@ -28,14 +28,31 @@ services:
       # can share :53 with another resolver bound to a different interface.
       # Multiple entries let it answer on e.g. the LAN iface *and* wg0 (VPN).
       FTLCONF_dns_listeningMode: "NONE"
-      FTLCONF_misc_dnsmasq_lines: |-
-        bind-dynamic
-{% for _iface in _pihole_ifaces %}
-        interface={{ _iface }}
-{% endfor %}
 {% else %}
       # No interface set: listen on all interfaces.
       FTLCONF_dns_listeningMode: "all"
+{% endif %}
+      # Raw dnsmasq directives (FTL's misc.dnsmasq_lines): the interface binding
+      # for the listening mode above, plus one server=/<zone>/<server> line per
+      # delegated zone. Always emitted, for the same reason as dns.hosts - an
+      # empty value clears the array, so removing an entry takes effect.
+{% set _dnsmasq_lines = [] %}
+{% if (_pihole_ifaces | length) > 0 %}
+{% set _ = _dnsmasq_lines.append('bind-dynamic') %}
+{% for _iface in _pihole_ifaces %}
+{% set _ = _dnsmasq_lines.append('interface=' ~ _iface) %}
+{% endfor %}
+{% endif %}
+{% for _fwd in pihole_dns_forward_zones | default([]) %}
+{% set _ = _dnsmasq_lines.append('server=/' ~ _fwd.zone ~ '/' ~ _fwd.server ~ ('#' ~ _fwd.port if _fwd.port is defined else '')) %}
+{% endfor %}
+{% if (_dnsmasq_lines | length) > 0 %}
+      FTLCONF_misc_dnsmasq_lines: |-
+{% for _line in _dnsmasq_lines %}
+        {{ _line }}
+{% endfor %}
+{% else %}
+      FTLCONF_misc_dnsmasq_lines: ""
 {% endif %}
 {% if (pihole_web_ip | default('')) | length > 0 %}
       # Bind the web admin to this IP only (80 -> redirect to TLS, 443 = TLS).

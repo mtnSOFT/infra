@@ -57,6 +57,44 @@ domain overrides (`address=/example.com/10.0.0.1`) are not wired up.
 > If records were ever added by hand there, copy them into `pihole_dns_records`
 > first.
 
+## Delegated zones
+
+`pihole_dns_forward_zones` hands a whole zone to another DNS server: queries for
+names in it are forwarded there rather than to `dns1`/`dns2`, so an internal zone
+resolves without ever being published to the internet.
+
+```yaml
+pihole_dns_forward_zones:
+  - zone: example.internal
+    server: 127.0.0.1
+    port: 5300        # optional, defaults to 53
+  - zone: lab.example.com
+    server: 10.10.0.3
+```
+
+Each entry renders one `server=/<zone>/<server>[#<port>]` dnsmasq directive into
+`misc.dnsmasq_lines`. That setting is shared with the interface binding
+`pihole_dns_interface` produces — both end up in the same list.
+
+The `127.0.0.1:5300` above is not arbitrary: it matches `powerdns_auth_address` /
+`powerdns_auth_port` in the [powerdns](../powerdns/README.md) role, whose
+authoritative server sits on loopback. That is the co-location pattern — Pi-hole
+owns `:53` and delegates its zone to PowerDNS behind it, instead of the two
+fighting over the port (which is why `powerdns_recursor_enabled` must be `false`
+on such a host).
+
+Delegation and local records compose in the useful direction: dnsmasq consults
+`dns.hosts` *before* forwarding, so a `pihole_dns_records` entry for a name inside
+a delegated zone wins over whatever the delegated server would answer.
+
+Reverse (`PTR`) delegation is not wired up — that is Pi-hole's separate
+`dns.revServers` setting, which couples a domain to a client subnet.
+
+> ⚠️ `misc.dnsmasq_lines` is now emitted on every run too (it previously appeared
+> only when `pihole_dns_interface` was set), so it is subject to the same caveat as
+> the records above: anything added to it by hand is replaced by what this role
+> renders.
+
 ## Key variables
 
 - `pihole_password` — web admin / API password (put it in vault)
@@ -67,6 +105,9 @@ domain overrides (`address=/example.com/10.0.0.1`) are not wired up.
 - `pihole_dir` — compose project directory (default `/containers/pihole`)
 - `pihole_dns_records` — local DNS overrides, a list of `{name, ip}` (default `[]`);
   see [Local DNS records](#local-dns-records)
+- `pihole_dns_forward_zones` — zones delegated to another DNS server, a list of
+  `{zone, server}` with an optional `port` (default `[]`); see
+  [Delegated zones](#delegated-zones)
 - `pihole_deploy` — bring the stack up with `docker compose` (default `true`); set
   `false` to render the config only
 - `pihole_dns_interface` — interface(s) FTL binds DNS on; empty (default) = all

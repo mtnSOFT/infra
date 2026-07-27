@@ -20,3 +20,13 @@ pihole_dns_records:
     ip: 10.10.0.1
   - name: nas.example.com
     ip: 10.10.0.20
+
+# Zones delegated to another DNS server. The first entry mirrors the powerdns
+# role's authoritative defaults (127.0.0.1:5300) and exercises the optional
+# `port`; the second omits it, so the default-53 branch is covered too.
+pihole_dns_forward_zones:
+  - zone: example.internal
+    server: 127.0.0.1
+    port: 5300
+  - zone: lab.example.com
+    server: 10.10.0.3

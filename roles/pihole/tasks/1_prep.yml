@@ -16,6 +16,23 @@
       contain whitespace or ";". Got: {{ pihole_dns_records }}.
   when: pihole_dns_records | length > 0
 
+# Each entry becomes a `server=/<zone>/<server>[#<port>]` dnsmasq line, so "/"
+# and "#" are structural here on top of ";" and whitespace.
+- name: Validate Pi-hole delegated zones
+  ansible.builtin.assert:
+    that:
+      - pihole_dns_forward_zones | rejectattr('zone', 'defined') | list | length == 0
+      - pihole_dns_forward_zones | rejectattr('server', 'defined') | list | length == 0
+      - pihole_dns_forward_zones | map(attribute='zone') | select('search', '[;\s/]') | list | length == 0
+      - pihole_dns_forward_zones | map(attribute='server') | select('search', '[;\s/#]') | list | length == 0
+      - pihole_dns_forward_zones | selectattr('port', 'defined') | map(attribute='port') | map('string') | select('search', '[^0-9]') | list | length == 0
+    fail_msg: >-
+      Every pihole_dns_forward_zones entry needs a `zone` and a `server`. Neither
+      may contain whitespace or ";", `zone` may not contain "/", and `server` may
+      not contain "/" or "#" - give the port as the separate numeric `port` key.
+      Got: {{ pihole_dns_forward_zones }}.
+  when: pihole_dns_forward_zones | length > 0
+
 - name: Create Pi-hole project directory
   ansible.builtin.file:
     path: "{{ pihole_dir }}"

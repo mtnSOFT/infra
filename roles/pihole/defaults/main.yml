@@ -23,6 +23,18 @@ pihole_dns_records: []
 #   - name: vpn.example.com
 #     ip: 10.10.0.1
 
+# Zones delegated to another DNS server: queries for these names are forwarded
+# there instead of to the upstreams. The usual case is an internal zone served by
+# an authoritative server (e.g. the powerdns role), so internal names resolve
+# without ever being published to the internet. `port` is optional (default 53).
+# Rendered as one `server=/<zone>/<server>[#<port>]` dnsmasq line per entry.
+pihole_dns_forward_zones: []
+# Example:
+# pihole_dns_forward_zones:
+#   - zone: example.internal
+#     server: 127.0.0.1
+#     port: 5300
+
 # Interface(s) FTL binds DNS on (host networking). Empty = listen on all
 # interfaces. Set to one interface (e.g. wg0) to bind only that one, so Pi-hole
 # can share :53 with another resolver on a different interface. Accepts a single

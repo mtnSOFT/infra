@@ -23,6 +23,10 @@ def _pihole_env(host):
     return _load(host, f"{BASE}/compose.yaml")["services"]["pihole"]["environment"]
 
 
+def _dnsmasq_lines(host):
+    return _pihole_env(host)["FTLCONF_misc_dnsmasq_lines"].splitlines()
+
+
 def test_project_directory(host):
     project = host.file(BASE)
     assert project.is_directory
@@ -82,14 +86,31 @@ def test_local_dns_records(host):
 
 
 def test_dns_listens_on_the_configured_interfaces_only(host):
-    env = _pihole_env(host)
     # No wildcard bind, so Pi-hole can share :53 with another resolver
-    assert env["FTLCONF_dns_listeningMode"] == "NONE"
+    assert _pihole_env(host)["FTLCONF_dns_listeningMode"] == "NONE"
 
-    lines = env["FTLCONF_misc_dnsmasq_lines"].splitlines()
+    lines = _dnsmasq_lines(host)
     assert "bind-dynamic" in lines
     assert "interface=eth0" in lines
     assert "interface=wg0" in lines
+
+
+def test_forwarded_zones_are_delegated_to_their_server(host):
+    lines = _dnsmasq_lines(host)
+    # `port` is optional; when given it is appended with "#"
+    assert "server=/example.internal/127.0.0.1#5300" in lines
+    assert "server=/lab.example.com/10.10.0.3" in lines
+
+
+def test_dnsmasq_lines_hold_nothing_else(host):
+    """The interface binding and the delegated zones share one FTL setting."""
+    assert _dnsmasq_lines(host) == [
+        "bind-dynamic",
+        "interface=eth0",
+        "interface=wg0",
+        "server=/example.internal/127.0.0.1#5300",
+        "server=/lab.example.com/10.10.0.3",
+    ]
 
 
 def test_web_admin_is_bound_to_one_ip(host):
