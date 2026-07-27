@@ -13,7 +13,7 @@
       - ufw
     state: present
 
-- name:  Ensure cron service is running
+- name: Ensure cron service is running
   ansible.builtin.systemd:
     name: cron
     state: started

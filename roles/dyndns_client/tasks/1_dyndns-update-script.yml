@@ -1,5 +1,5 @@
 ---
-- name:  Ensure curl is installed
+- name: Ensure curl is installed
   ansible.builtin.apt:
     name: curl
     state: present
@@ -11,7 +11,7 @@
     dest: /usr/local/bin/update-dyndns.sh
     owner: root
     group: root
-    mode: '0700'
+    mode: "0700"
   become: yes
 
 - name: Setup cron job for DynDNS updates

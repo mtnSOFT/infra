@@ -1,6 +1,6 @@
 ---
- - name: Deploy k8s aliases script
-   copy:
-     src: k3s-helpers.bash_source
-     dest: /etc/profile.d/k3s-helpers.sh
-     mode: '0644'
+- name: Deploy k8s aliases script
+  copy:
+    src: k3s-helpers.bash_source
+    dest: /etc/profile.d/k3s-helpers.sh
+    mode: "0644"
