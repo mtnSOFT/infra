@@ -1,0 +1,8 @@
+---
+- name: Deploy monitoring container stack
+  community.docker.docker_compose_v2:
+    project_src: "{{ monitoring_dir }}"
+    state: present
+    pull: always
+    remove_orphans: true
+  when: monitoring_deploy | bool

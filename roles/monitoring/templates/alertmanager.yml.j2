@@ -1,0 +1,22 @@
+# Ansible managed - may contain notification secrets, keep this file 0640.
+global:
+{{ monitoring_alertmanager_global | to_nice_yaml(indent=2) | trim | indent(2, true) }}
+
+route:
+  receiver: "{{ monitoring_alertmanager_default_receiver }}"
+  group_by: {{ monitoring_alertmanager_group_by | to_json }}
+  group_wait: {{ monitoring_alertmanager_group_wait }}
+  group_interval: {{ monitoring_alertmanager_group_interval }}
+  repeat_interval: {{ monitoring_alertmanager_repeat_interval }}
+{% if monitoring_alertmanager_routes %}
+  routes:
+{{ monitoring_alertmanager_routes | to_nice_yaml(indent=2) | trim | indent(4, true) }}
+{% endif %}
+
+receivers:
+{{ monitoring_alertmanager_receivers | to_nice_yaml(indent=2) | trim | indent(2, true) }}
+{% if monitoring_alertmanager_inhibit_rules %}
+
+inhibit_rules:
+{{ monitoring_alertmanager_inhibit_rules | to_nice_yaml(indent=2) | trim | indent(2, true) }}
+{% endif %}

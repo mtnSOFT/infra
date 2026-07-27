@@ -1,0 +1,7 @@
+---
+- name: Apply monitoring role
+  hosts: monitoring
+  become: true
+  roles:
+    - docker-compose
+    - monitoring

@@ -1,0 +1,118 @@
+---
+# Data directories are chowned to the UIDs the upstream images run as; the same
+# UIDs are pinned as `user:` on the compose services. The project directory
+# stays 0750 root:root - bind mounts are performed by the docker daemon as
+# root, so the containers only need permissions on the mount targets.
+- name: Create monitoring directory tree
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner | default('root') }}"
+    group: "{{ item.group | default('root') }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - path: "{{ monitoring_dir }}"
+      mode: "0750"
+    - path: "{{ monitoring_dir }}/prometheus"
+      mode: "0755"
+    - path: "{{ monitoring_dir }}/prometheus/rules"
+      mode: "0755"
+    - path: "{{ monitoring_dir }}/prometheus/data"
+      mode: "0750"
+      owner: "{{ monitoring_nobody_uid }}"
+      group: "{{ monitoring_nobody_gid }}"
+    - path: "{{ monitoring_dir }}/alertmanager"
+      mode: "0755"
+    - path: "{{ monitoring_dir }}/alertmanager/data"
+      mode: "0750"
+      owner: "{{ monitoring_nobody_uid }}"
+      group: "{{ monitoring_nobody_gid }}"
+    - path: "{{ monitoring_dir }}/grafana"
+      mode: "0755"
+    - path: "{{ monitoring_dir }}/grafana/provisioning"
+      mode: "0755"
+    - path: "{{ monitoring_dir }}/grafana/provisioning/datasources"
+      mode: "0755"
+    - path: "{{ monitoring_dir }}/grafana/provisioning/dashboards"
+      mode: "0755"
+    - path: "{{ monitoring_dir }}/grafana/dashboards"
+      mode: "0755"
+    - path: "{{ monitoring_dir }}/grafana/data"
+      mode: "0750"
+      owner: "{{ monitoring_grafana_uid }}"
+      group: "{{ monitoring_grafana_gid }}"
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Render Prometheus configuration
+  ansible.builtin.template:
+    src: prometheus.yml.j2
+    dest: "{{ monitoring_dir }}/prometheus/prometheus.yml"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart prometheus
+
+# Alertmanager does not expand environment variables in its config, so receiver
+# secrets (webhook URLs, SMTP passwords) are rendered inline. Keep the file
+# group-readable by the container UID only, never world-readable.
+- name: Render Alertmanager configuration
+  ansible.builtin.template:
+    src: alertmanager.yml.j2
+    dest: "{{ monitoring_dir }}/alertmanager/alertmanager.yml"
+    owner: root
+    group: "{{ monitoring_nobody_gid }}"
+    mode: "0640"
+  no_log: true
+  notify: Restart alertmanager
+
+- name: Render Grafana datasource provisioning
+  ansible.builtin.template:
+    src: grafana-datasource.yml.j2
+    dest: "{{ monitoring_dir }}/grafana/provisioning/datasources/prometheus.yml"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart grafana
+
+- name: Render Grafana dashboard provider
+  ansible.builtin.template:
+    src: grafana-dashboards.yml.j2
+    dest: "{{ monitoring_dir }}/grafana/provisioning/dashboards/default.yml"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart grafana
+
+# No restart needed: the file provider polls this directory and picks up
+# added/changed dashboards on its own.
+- name: Copy dashboard definitions
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ monitoring_dir }}/grafana/dashboards/{{ item | basename }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ query('ansible.builtin.fileglob', 'dashboards/*.json') }}"
+  loop_control:
+    label: "{{ item | basename }}"
+
+# No handler: a changed value here changes the service's resolved compose
+# config, so 2_install.yml's `up` recreates the container on its own (a plain
+# restart would not re-read .env anyway).
+- name: Render monitoring secrets env file
+  ansible.builtin.template:
+    src: monitoring.env.j2
+    dest: "{{ monitoring_dir }}/.env"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Render monitoring compose file
+  ansible.builtin.template:
+    src: compose.yaml.j2
+    dest: "{{ monitoring_dir }}/compose.yaml"
+    owner: root
+    group: root
+    mode: "0644"
