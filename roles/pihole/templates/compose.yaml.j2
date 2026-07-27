@@ -12,6 +12,15 @@ services:
       FTLCONF_webserver_api_password: "${PIHOLE_WEBPASSWORD}"
       # Upstream resolvers
       FTLCONF_dns_upstreams: "{{ dns1 }};{{ dns2 }}"
+      # Local DNS records (FTL's dns.hosts): internal overrides answered ahead of
+      # the upstreams. Entries are "IP HOSTNAME", joined with ";" like every other
+      # FTLCONF array. Always emitted - an empty value clears the array, so removing
+      # an entry from pihole_dns_records removes it from Pi-hole.
+{% set _pihole_hosts = [] %}
+{% for _record in pihole_dns_records | default([]) %}
+{% set _ = _pihole_hosts.append(_record.ip ~ ' ' ~ _record.name) %}
+{% endfor %}
+      FTLCONF_dns_hosts: "{{ _pihole_hosts | join(';') }}"
 {% set _raw_ifaces = pihole_dns_interface | default('') %}
 {% set _pihole_ifaces = _raw_ifaces if (_raw_ifaces is not string) else ([_raw_ifaces] if _raw_ifaces else []) %}
 {% if (_pihole_ifaces | length) > 0 %}

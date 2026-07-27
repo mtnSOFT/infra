@@ -1,0 +1,23 @@
+---
+- name: Converge
+  hosts: all
+  become: true
+  vars:
+    # The test container has no docker daemon, so the stack is not brought up -
+    # this scenario verifies the rendered configuration, which is where the
+    # role's logic lives.
+    pihole_deploy: false
+    # Not from vault: keeping it here leaves inventories/test/hosts untouched,
+    # which the CI workflow treats as a global path (it would run every scenario).
+    pihole_password: "molecule-test-password"
+    # Exercise the optional template branches: a multi-interface DNS bind, a
+    # web admin pinned to one IP, and local DNS records.
+    pihole_dns_interface: ["eth0", "wg0"]
+    pihole_web_ip: "10.10.0.1"
+    pihole_dns_records:
+      - name: vpn.example.com
+        ip: 10.10.0.1
+      - name: nas.example.com
+        ip: 10.10.0.20
+  roles:
+    - pihole

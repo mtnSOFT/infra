@@ -5,3 +5,4 @@
     state: present
     pull: always
     remove_orphans: true
+  when: pihole_deploy | bool

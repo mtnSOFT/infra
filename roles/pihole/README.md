@@ -26,6 +26,37 @@ The embedded NTP server/sync and the DHCP server are disabled — this is a
 DNS resolver with the web admin only. Persistent data (config, gravity and
 query databases) lives in `{{ pihole_dir }}/etc-pihole`.
 
+## Local DNS records
+
+`pihole_dns_records` defines internal overrides — names answered from this list
+instead of from the upstreams. The usual case is a service whose public DNS points
+at the router's WAN address: without an override, a client already inside the LAN or
+the VPN resolves the public IP and hairpins out and back instead of going straight
+to the internal address.
+
+```yaml
+pihole_dns_records:
+  - name: vpn.example.com
+    ip: 10.10.0.1
+  - name: nas.example.com
+    ip: 10.10.0.20
+```
+
+These land in FTL's `dns.hosts` — the same store the web admin's
+**Settings → Local DNS Records** page uses — via `FTLCONF_dns_hosts`. Pi-hole makes
+any setting supplied through the environment [read-only in the web UI and
+CLI](https://docs.pi-hole.net/docker/configuration/), so the entries show up there
+greyed out: this list is the single source of truth, and hand edits can't drift
+from it. The same already applies to the upstreams and the listening mode.
+
+Only A records (name → IP) are handled. Aliases (`dns.cnameRecords`) and wildcard
+domain overrides (`address=/example.com/10.0.0.1`) are not wired up.
+
+> ⚠️ **Before the first run on an existing Pi-hole:** `FTLCONF_dns_hosts` is always
+> emitted, so an empty `pihole_dns_records` *clears* the Local DNS Records page.
+> If records were ever added by hand there, copy them into `pihole_dns_records`
+> first.
+
 ## Key variables
 
 - `pihole_password` — web admin / API password (put it in vault)
@@ -34,6 +65,10 @@ query databases) lives in `{{ pihole_dir }}/etc-pihole`.
 - `pihole_image` — image repository (default `pihole/pihole`)
 - `pihole_version_tag` — image tag (default `latest`)
 - `pihole_dir` — compose project directory (default `/containers/pihole`)
+- `pihole_dns_records` — local DNS overrides, a list of `{name, ip}` (default `[]`);
+  see [Local DNS records](#local-dns-records)
+- `pihole_deploy` — bring the stack up with `docker compose` (default `true`); set
+  `false` to render the config only
 - `pihole_dns_interface` — interface(s) FTL binds DNS on; empty (default) = all
   interfaces, e.g. `wg0` to bind only that one, or a list like `["eth1", "wg0"]`
   to answer on several (e.g. a LAN interface *and* WireGuard clients)

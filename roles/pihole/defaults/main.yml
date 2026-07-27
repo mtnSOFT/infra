@@ -6,6 +6,23 @@ pihole_version_tag: "latest"
 # Where the compose project and its persistent /etc/pihole volume live
 pihole_dir: "/containers/pihole"
 
+# Bring the stack up with `docker compose`. Set false to render the configuration
+# only - that is what the molecule scenario does, since the test container has no
+# docker daemon.
+pihole_deploy: true
+
+# Local DNS records served ahead of the upstreams - internal overrides, e.g. so
+# vpn.example.com answers with the host's WireGuard address instead of the
+# router's public IP. Rendered into FTL's dns.hosts, the same store the web
+# admin's "Local DNS records" page uses; because it is set from the environment
+# it is read-only there, and this list is authoritative - an entry removed here
+# is removed from Pi-hole.
+pihole_dns_records: []
+# Example:
+# pihole_dns_records:
+#   - name: vpn.example.com
+#     ip: 10.10.0.1
+
 # Interface(s) FTL binds DNS on (host networking). Empty = listen on all
 # interfaces. Set to one interface (e.g. wg0) to bind only that one, so Pi-hole
 # can share :53 with another resolver on a different interface. Accepts a single
