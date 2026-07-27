@@ -1,8 +1,7 @@
 ---
-# The Grafana password below is a throwaway molecule fixture, not a credential -
-# it only ever reaches an ephemeral test container. This repo already commits the
-# test vault password in plaintext for the same reason (.ansible_vault_pass.txt).
-# kics-scan disable=a88baa34-e2ad-44ea-ad6f-8cac87bc7c71
+# monitoring_grafana_admin_password comes from the test inventory's vault
+# (inventories/test/group_vars/monitoring/), so this exercises the same
+# vault_* indirection production uses.
 - name: Converge
   hosts: all
   become: true
@@ -11,10 +10,6 @@
     # this scenario verifies the rendered configuration, which is where the
     # role's logic lives.
     monitoring_deploy: false
-    # Not defined in the test inventory (same as pihole_password); in production
-    # this comes from vault.
-    # checkov:skip=CKV_SECRET_6 molecule fixture, not a real credential
-    monitoring_grafana_admin_password: "molecule-test-password"
     # Non-default bind addresses so the port mappings are actually asserted.
     monitoring_bind_ip: "127.0.0.1"
     monitoring_grafana_bind_ip: "10.10.0.1"

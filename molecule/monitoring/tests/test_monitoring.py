@@ -13,6 +13,17 @@ def _load(host, path):
     return yaml.safe_load(host.file(path).content_string)
 
 
+def _grafana_password(host):
+    """The rendered password, read back from .env rather than hardcoded here."""
+    prefix = "GF_SECURITY_ADMIN_PASSWORD="
+    lines = [
+        line for line in host.file(f"{BASE}/.env").content_string.splitlines()
+        if line.startswith(prefix)
+    ]
+    assert len(lines) == 1, lines
+    return lines[0][len(prefix):]
+
+
 def test_project_directory(host):
     project = host.file(BASE)
     assert project.is_directory
@@ -51,14 +62,19 @@ def test_env_file_holds_the_secret_and_is_not_world_readable(host):
     assert env.exists
     assert env.user == "root"
     assert env.mode == 0o600
-    assert env.contains("GF_SECURITY_ADMIN_PASSWORD=molecule-test-password")
+
+    # Sourced from the test inventory's vault via monitoring_grafana_admin_password;
+    # an unresolved or empty value means the vault_* indirection is broken.
+    password = _grafana_password(host)
+    assert password
+    assert "{{" not in password
 
 
 def test_compose_file(host):
     compose = host.file(f"{BASE}/compose.yaml")
     assert compose.mode == 0o644
     # compose.yaml is world-readable, so the password must not be inlined here
-    assert "molecule-test-password" not in compose.content_string
+    assert _grafana_password(host) not in compose.content_string
 
     services = _load(host, f"{BASE}/compose.yaml")["services"]
     assert set(services) == {"prometheus", "alertmanager", "grafana"}
