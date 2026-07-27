@@ -27,3 +27,8 @@ PYTHON_BANDIT_FILTER_REGEX_EXCLUDE: ^molecule?/
 
 # config is created during megalinter ci run and king fisher complains about credential in there
 REPOSITORY_KINGFISHER_ARGUMENTS: "--exclude .git/"
+
+# Vendored Grafana dashboard JSON, kept byte-identical to the upstream revision
+# so a newer one diffs cleanly. Excluded from every linter: prettier would
+# reformat it and APPLY_FIXES would raise a PR for it on each run.
+FILTER_REGEX_EXCLUDE: (roles/monitoring/files/dashboards/)

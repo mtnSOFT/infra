@@ -34,7 +34,15 @@ Prometheus, Grafana and Alertmanager as one Docker Compose stack. Needs the
   `monitoring_prometheus_extra_scrape_configs` — Prometheus refuses to start on a
   duplicate `job_name`.
 - Alert rules are wired up (`/etc/prometheus/rules/*.yml`) but ship empty.
-- Dashboards: commit JSON to `files/dashboards/`; UI edits are not persisted.
+- Dashboards: commit JSON to `files/dashboards/`; UI edits are not persisted
+  (`allowUiUpdates: false`). Ships **Node Exporter Full**
+  ([grafana.com/dashboards/1860](https://grafana.com/grafana/dashboards/1860),
+  revision 45), vendored byte-identical to upstream so a newer revision diffs
+  cleanly. Refresh it with
+  `curl -o roles/monitoring/files/dashboards/node-exporter-full.json https://grafana.com/api/dashboards/1860/revisions/<n>/download`.
+- A few 1860 panels need collectors that are off by default — add
+  `--collector.systemd` / `--collector.processes` to `node_exporter_extra_args`
+  if you want them, otherwise those panels read "No data".
 - Exporters are not included yet — add scrape jobs via
   `monitoring_prometheus_extra_scrape_configs`.
 

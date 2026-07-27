@@ -11,6 +11,7 @@
     "**/.idea/**",
     "**/report/**",
     "**/roles/**/main.yml",
+    "**/roles/monitoring/files/dashboards/**",
     "**/*.svg"
   ]
 }
