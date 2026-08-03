@@ -1,0 +1,32 @@
+---
+# The test container has no docker daemon, so the stack is not brought up - the
+# scenario verifies the rendered configuration, which is where the role's logic
+# lives.
+pihole_deploy: false
+
+# From vault.yml next to this file, so the scenario exercises the same vault_*
+# indirection production uses.
+pihole_password: "{{ vault_pihole_password }}"
+
+# Non-default values so the optional template branches are actually asserted:
+# a multi-interface DNS bind, and the web admin pinned to a single IP.
+pihole_dns_interface: ["eth0", "wg0"]
+pihole_web_ip: "10.10.0.1"
+
+# Local DNS overrides: internal names answered ahead of the upstreams
+# (dns1 / dns2 come from group_vars/all).
+pihole_dns_records:
+  - name: vpn.example.com
+    ip: 10.10.0.1
+  - name: nas.example.com
+    ip: 10.10.0.20
+
+# Zones delegated to another DNS server. The first entry mirrors the powerdns
+# role's authoritative defaults (127.0.0.1:5300) and exercises the optional
+# `port`; the second omits it, so the default-53 branch is covered too.
+pihole_dns_forward_zones:
+  - zone: example.internal
+    server: 127.0.0.1
+    port: 5300
+  - zone: lab.example.com
+    server: 10.10.0.3
