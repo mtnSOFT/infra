@@ -4,9 +4,9 @@
 # lives.
 pihole_deploy: false
 
-# Throwaway test value. Production keeps this in vault - see the monitoring group
-# for the vault_* indirection pattern.
-pihole_password: "molecule-test-password"
+# From vault.yml next to this file, so the scenario exercises the same vault_*
+# indirection production uses.
+pihole_password: "{{ vault_pihole_password }}"
 
 # Non-default values so the optional template branches are actually asserted:
 # a multi-interface DNS bind, and the web admin pinned to a single IP.

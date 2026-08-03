@@ -1,5 +1,6 @@
 ---
-# Test values live in inventories/test/group_vars/pihole/vars.yml.
+# Test values live in inventories/test/group_vars/pihole/ - including the admin
+# password, which comes from that group's vault via pihole_password.
 - name: Converge
   hosts: pihole
   become: true

@@ -8,15 +8,13 @@ def _load(host, path):
     return yaml.safe_load(host.file(path).content_string)
 
 
-def _pihole_password(host):
-    """The rendered password, read back from .env rather than hardcoded here."""
-    prefix = "PIHOLE_WEBPASSWORD="
-    lines = [
-        line for line in host.file(f"{BASE}/.env").content_string.splitlines()
-        if line.startswith(prefix)
-    ]
-    assert len(lines) == 1, lines
-    return lines[0][len(prefix):]
+def _env_file(host):
+    """The rendered .env as a dict, so secrets are read back and never hardcoded."""
+    return dict(
+        line.split("=", 1)
+        for line in host.file(f"{BASE}/.env").content_string.splitlines()
+        if "=" in line
+    )
 
 
 def _pihole_env(host):
@@ -49,7 +47,10 @@ def test_env_file_holds_the_secret_and_is_not_world_readable(host):
     assert env.user == "root"
     assert env.mode == 0o600
 
-    password = _pihole_password(host)
+    # The only variable in there. It reaches the role as vault_pihole_password,
+    # so a leftover "{{" or an empty value means that indirection is broken.
+    assert list(_env_file(host)) == ["PIHOLE_WEBPASSWORD"]
+    password = _env_file(host)["PIHOLE_WEBPASSWORD"]
     assert password
     assert "{{" not in password
 
@@ -58,7 +59,7 @@ def test_compose_file(host):
     compose = host.file(f"{BASE}/compose.yaml")
     assert compose.mode == 0o644
     # compose.yaml is world-readable, so the password must not be inlined here
-    assert _pihole_password(host) not in compose.content_string
+    assert _env_file(host)["PIHOLE_WEBPASSWORD"] not in compose.content_string
 
     services = _load(host, f"{BASE}/compose.yaml")["services"]
     assert set(services) == {"pihole"}
