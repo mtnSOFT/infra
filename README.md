@@ -26,6 +26,7 @@ directory structure:
 | [linux_router](roles/linux_router/README.md)     | Turns a host into a router/gateway                                         |
 | [monitoring](roles/monitoring/README.md)         | Prometheus + Grafana + Alertmanager as a Docker Compose stack              |
 | [netplan](roles/netplan/README.md)               | Deploys per-host netplan network config                                    |
+| [node_exporter](roles/node_exporter/README.md)   | Prometheus node exporter on monitored hosts                                |
 | [pihole](roles/pihole/README.md)                 | Pi-hole DNS sinkhole / ad blocker                                          |
 | [postgresql](roles/postgresql/README.md)         | PostgreSQL 17 server                                                       |
 | [powerdns](roles/powerdns/README.md)             | Authoritative PowerDNS server + Recursor (resolves outside the local zone) |

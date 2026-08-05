@@ -1,0 +1,6 @@
+---
+- name: Apply node_exporter role
+  hosts: monitored
+  become: true
+  roles:
+    - node_exporter

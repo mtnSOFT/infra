@@ -29,8 +29,20 @@ Prometheus, Grafana and Alertmanager as one Docker Compose stack. Needs the
   reset-admin-password '<new>'`.
 - Containers are named by compose (`monitoring-grafana-1`, …), so address them
   with `docker compose exec <service>` rather than a fixed container name.
+- **Job names must be unique.** Hosts in the `monitored` group are scraped by a
+  derived job called `node`, so don't reuse that name in
+  `monitoring_prometheus_extra_scrape_configs` — Prometheus refuses to start on a
+  duplicate `job_name`.
 - Alert rules are wired up (`/etc/prometheus/rules/*.yml`) but ship empty.
-- Dashboards: commit JSON to `files/dashboards/`; UI edits are not persisted.
+- Dashboards: commit JSON to `files/dashboards/`; UI edits are not persisted
+  (`allowUiUpdates: false`). Ships **Node Exporter Full**
+  ([grafana.com/dashboards/1860](https://grafana.com/grafana/dashboards/1860),
+  revision 45), vendored byte-identical to upstream so a newer revision diffs
+  cleanly. Refresh it with
+  `curl -o roles/monitoring/files/dashboards/node-exporter-full.json https://grafana.com/api/dashboards/1860/revisions/<n>/download`.
+- A few 1860 panels need collectors that are off by default — add
+  `--collector.systemd` / `--collector.processes` to `node_exporter_extra_args`
+  if you want them, otherwise those panels read "No data".
 - Exporters are not included yet — add scrape jobs via
   `monitoring_prometheus_extra_scrape_configs`.
 
@@ -49,6 +61,9 @@ Prometheus, Grafana and Alertmanager as one Docker Compose stack. Needs the
 - `monitoring_prometheus_retention` — TSDB retention (default `30d`)
 - `monitoring_prometheus_scrape_interval` — scrape cadence (default `30s`)
 - `monitoring_prometheus_external_labels` — labels added to every series and alert
+- `monitoring_node_group` — inventory group scraped as node exporters
+  (default `monitored`; see [node_exporter](../node_exporter/README.md))
+- `monitoring_node_exporter_port` — port for those targets (default `9100`)
 - `monitoring_prometheus_extra_scrape_configs` — extra scrape jobs, appended to
   `scrape_configs`
 - `monitoring_alertmanager_global` — Alertmanager's `global:` block (SMTP / Slack

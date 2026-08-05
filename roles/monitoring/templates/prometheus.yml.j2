@@ -20,6 +20,21 @@ scrape_configs:
   - job_name: prometheus
     static_configs:
       - targets: ["localhost:9090"]
+{# Hosts in the monitoring_node_group inventory group, one entry each so the
+   instance label is the inventory hostname rather than a bare IP. Only inventory
+   vars are read (never facts), so this renders correctly under --limit. #}
+{% set _nodes = groups[monitoring_node_group] | default([]) | sort %}
+{% if _nodes %}
+  - job_name: node
+    static_configs:
+{% for host in _nodes %}
+{% set _address = hostvars[host].node_exporter_address | default(hostvars[host].ansible_host | default(host)) %}
+{% set _port = hostvars[host].node_exporter_port | default(monitoring_node_exporter_port) %}
+      - targets: ["{{ _address }}:{{ _port }}"]
+        labels:
+          instance: "{{ host }}"
+{% endfor %}
+{% endif %}
 {% if monitoring_prometheus_extra_scrape_configs %}
 {{ monitoring_prometheus_extra_scrape_configs | to_nice_yaml(indent=2) | trim | indent(2, true) }}
 {% endif %}

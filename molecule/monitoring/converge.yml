@@ -17,8 +17,10 @@
     # jobs and a second Alertmanager receiver.
     monitoring_prometheus_external_labels:
       cluster: molecule
+    # Not named "node": that job is derived from the [monitored] inventory group
+    # and Prometheus rejects a config with duplicate job names.
     monitoring_prometheus_extra_scrape_configs:
-      - job_name: node
+      - job_name: extra
         static_configs:
           - targets: ["10.0.0.10:9100"]
     monitoring_alertmanager_receivers:

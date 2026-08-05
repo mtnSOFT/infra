@@ -109,9 +109,29 @@ def test_prometheus_config(host):
     alertmanagers = config["alerting"]["alertmanagers"][0]["static_configs"][0]
     assert alertmanagers["targets"] == ["alertmanager:9093"]
 
-    # self-scrape plus the extra jobs from monitoring_prometheus_extra_scrape_configs
-    assert [job["job_name"] for job in config["scrape_configs"]] == ["prometheus", "node"]
-    assert config["scrape_configs"][1]["static_configs"][0]["targets"] == ["10.0.0.10:9100"]
+    # self-scrape, the job derived from the [monitored] group, then the extras
+    jobs = [job["job_name"] for job in config["scrape_configs"]]
+    assert jobs == ["prometheus", "node", "extra"]
+    # Prometheus refuses to start on duplicate job names, and nothing else here
+    # runs Prometheus, so guard it explicitly.
+    assert len(jobs) == len(set(jobs)), jobs
+
+    extra = config["scrape_configs"][2]
+    assert extra["static_configs"][0]["targets"] == ["10.0.0.10:9100"]
+
+
+def test_node_job_derived_from_inventory_group(host):
+    config = _load(host, f"{BASE}/prometheus/prometheus.yml")
+    node = next(j for j in config["scrape_configs"] if j["job_name"] == "node")
+
+    # One entry per host in the [monitored] group; the test inventory has one.
+    # The address is whatever molecule set for the container, so assert the parts
+    # the role controls: the instance label is the inventory hostname, not an IP.
+    assert len(node["static_configs"]) == 1
+    entry = node["static_configs"][0]
+    assert entry["labels"]["instance"] == "testhost-ubuntu-24.04"
+    assert len(entry["targets"]) == 1
+    assert entry["targets"][0].endswith(":9100")
 
 
 def test_alertmanager_config(host):
