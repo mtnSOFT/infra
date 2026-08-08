@@ -1,0 +1,43 @@
+---
+# sqlite3 for the online backup API (the container image does not ship the CLI),
+# cron to run the job - neither is guaranteed to be on a minimal install.
+- name: Ensure the backup dependencies are installed
+  ansible.builtin.apt:
+    name:
+      - sqlite3
+      - cron
+    state: present
+    update_cache: true
+    cache_valid_time: "3600"
+  when: vaultwarden_backup_enabled | bool
+
+# Archives hold the RSA token signing keys and every attachment, so the
+# directory is root-only like the data it is taken from.
+- name: Create Vaultwarden backup directory
+  ansible.builtin.file:
+    path: "{{ vaultwarden_backup_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  when: vaultwarden_backup_enabled | bool
+
+- name: Create Vaultwarden backup script
+  ansible.builtin.template:
+    src: vaultwarden-backup.sh.j2
+    dest: "{{ vaultwarden_backup_script }}"
+    owner: root
+    group: root
+    mode: "0700"
+  when: vaultwarden_backup_enabled | bool
+
+# Removed again when vaultwarden_backup_enabled is turned off, so disabling
+# backups actually stops them - the script and the archives stay put.
+- name: Schedule daily Vaultwarden backup
+  ansible.builtin.cron:
+    name: "Vaultwarden backup"
+    minute: "{{ vaultwarden_backup_minute }}"
+    hour: "{{ vaultwarden_backup_hour }}"
+    job: "{{ vaultwarden_backup_script }}"
+    user: root
+    state: "{{ 'present' if vaultwarden_backup_enabled | bool else 'absent' }}"

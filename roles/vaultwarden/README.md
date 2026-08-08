@@ -22,6 +22,13 @@ password manager) as a Docker Compose stack. Needs the
 - Enables the `/admin` panel only when `vaultwarden_admin_token` is set; the
   token is interpolated from a `0600` `.env` next to the compose file, never
   inlined into `compose.yaml`
+- Installs `/usr/local/bin/vaultwarden-backup.sh` and a **daily cron job**
+  (03:30 by default) that writes one timestamped `0600` tarball per run into
+  `{{ vaultwarden_backup_dir }}` (default `{{ vaultwarden_dir }}/backup`) and
+  keeps the newest `vaultwarden_backup_keep` (default 10), pruning the rest.
+  The database is copied with SQLite's online backup API, so the stack keeps
+  running; attachments, sends, `config.json` and the RSA token signing keys go
+  into the same archive
 
 ## Gotchas
 
@@ -56,9 +63,22 @@ password manager) as a Docker Compose stack. Needs the
   (`docker run --rm -it vaultwarden/server /vaultwarden hash`), double every `$`
   in the value — `docker compose` interpolates `.env` and would otherwise eat
   parts of the Argon2 string.
-- **Back up `{{ vaultwarden_dir }}/data`.** It holds `db.sqlite3` plus the RSA
-  keys that sign login tokens; a copy taken while the container writes can be
-  torn, so stop the stack or use `sqlite3 db.sqlite3 ".backup ..."`.
+- **The backups stay on the same host.** Ten daily tarballs next to the data
+  they came from survive a bad upgrade, not a dead disk — copy
+  `{{ vaultwarden_backup_dir }}` off the machine with whatever does the rest of
+  your off-site backups. The archives are unencrypted: vault *items* are
+  end-to-end encrypted, but the token signing keys and attachment metadata in
+  there are not.
+- **Restoring means stopping the stack first**, and the stale WAL/SHM files have
+  to go with it — they belong to the database you are replacing:
+
+  ```sh
+  cd /containers/vaultwarden
+  docker compose down
+  rm -f data/db.sqlite3 data/db.sqlite3-wal data/db.sqlite3-shm
+  tar xzf backup/vaultwarden-<timestamp>.tar.gz -C data
+  docker compose up -d
+  ```
 
 ## Key variables
 
@@ -78,13 +98,26 @@ password manager) as a Docker Compose stack. Needs the
   `true`)
 - `vaultwarden_image` / `vaultwarden_version_tag` — image and tag (default
   `vaultwarden/server:latest`; pin these in inventory)
+- `vaultwarden_backup_enabled` — install the script and the cron job (default
+  `true`; `false` removes the job again and leaves the archives alone)
+- `vaultwarden_backup_dir` — where the archives land (default
+  `{{ vaultwarden_dir }}/backup`)
+- `vaultwarden_backup_keep` — archives kept, oldest pruned first (default `10`)
+- `vaultwarden_backup_hour` / `vaultwarden_backup_minute` — when the daily run
+  happens, in host time (default `3` / `30`)
+- `vaultwarden_backup_script` — path of the rendered script (default
+  `/usr/local/bin/vaultwarden-backup.sh`)
 - `timezone` — container timezone (default `UTC`)
 
 ## Usage
 
 `ansible-playbook -i inventories/production/hosts playbooks/vaultwarden.yml`
 
-Targets the `vaultwarden` group. Configure it in `group_vars/vaultwarden/`:
+Targets the `vaultwarden` group. `--tags backup` re-applies just the backup
+script and its cron job; `/usr/local/bin/vaultwarden-backup.sh` also runs by hand
+whenever you want an extra archive (before an image bump, say).
+
+Configure it in `group_vars/vaultwarden/`:
 
 ```yaml
 # vars.yml

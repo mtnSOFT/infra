@@ -1,6 +1,8 @@
 import yaml
 
 BASE = "/containers/vaultwarden"
+BACKUP = f"{BASE}/backup"
+SCRIPT = "/usr/local/bin/vaultwarden-backup.sh"
 
 
 def _load(host, path):
@@ -109,6 +111,73 @@ def test_database_is_sqlite(host):
     # No DATABASE_URL at all: that is what makes Vaultwarden fall back to SQLite
     # in /data, the whole point of this stack.
     assert "DATABASE_URL" not in _service(host)["environment"]
+
+
+def test_backup_directory_and_script(host):
+    # The archives hold the token signing keys and every attachment, so both the
+    # directory and the script that writes it stay root-only.
+    backup = host.file(BACKUP)
+    assert backup.is_directory
+    assert backup.user == "root"
+    assert backup.group == "root"
+    assert backup.mode == 0o700
+
+    script = host.file(SCRIPT)
+    assert script.exists
+    assert script.user == "root"
+    assert script.mode == 0o700
+
+
+def test_backup_runs_daily_from_cron(host):
+    crontab = host.file("/var/spool/cron/crontabs/root").content_string
+    # The marker ansible.builtin.cron writes, so the job stays managed
+    assert "#Ansible: Vaultwarden backup" in crontab
+    assert f"30 3 * * * {SCRIPT}" in crontab
+
+
+def test_backup_archives_the_data_and_keeps_the_last_ten(host):
+    # The container never ran in this scenario, so stand in for it: a database
+    # with one row and an attachment beside it.
+    host.check_output(
+        f"sqlite3 {BASE}/data/db.sqlite3 'create table if not exists t(x); "
+        "delete from t; insert into t values (1)'"
+    )
+    # -D so the attachments directory Vaultwarden would have created appears too
+    host.check_output(f"install -D -m 600 /dev/null {BASE}/data/attachments/x.bin")
+
+    # Twelve older archives, so the run has more than ten to prune down to
+    host.check_output(
+        "for d in $(seq -w 1 12); do "
+        f"f={BACKUP}/vaultwarden-202001$d-000000.tar.gz; "
+        'echo stale > "$f"; touch -d "2020-01-$d 00:00:00" "$f"; done'
+    )
+
+    host.check_output(SCRIPT)
+
+    listed = host.check_output(f"ls -1t {BACKUP}/vaultwarden-*.tar.gz")
+    archives = listed.splitlines()
+    assert len(archives) == 10
+    # Newest first: the fresh archive, then the stale ones that survived
+    newest = archives[0]
+    assert newest.startswith(f"{BACKUP}/vaultwarden-")
+    assert "-202001" not in newest
+    assert f"{BACKUP}/vaultwarden-20200112-000000.tar.gz" in archives
+    assert f"{BACKUP}/vaultwarden-20200101-000000.tar.gz" not in archives
+
+    assert host.file(newest).mode == 0o600
+    members = host.check_output(f"tar tzf {newest}").split()
+    assert "./attachments/x.bin" in members
+    # The consistent copy sits at the archive root; the live database and its
+    # WAL/SHM sidecars are excluded so a torn file cannot shadow it.
+    assert "db.sqlite3" in members
+    assert "./db.sqlite3" not in members
+
+    # The copy is a working database, not just a file that happens to exist
+    restored = host.check_output(
+        f"tmp=$(mktemp -d) && tar xzf {newest} -C $tmp db.sqlite3 && "
+        "sqlite3 $tmp/db.sqlite3 'select count(*) from t'"
+    )
+    assert restored == "1"
 
 
 def test_account_handling(host):
