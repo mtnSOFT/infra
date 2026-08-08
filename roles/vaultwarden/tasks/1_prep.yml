@@ -1,0 +1,77 @@
+---
+# The domain and the TLS pair are the settings that cannot be guessed: without a
+# certificate Rocket refuses to start, and a wrong DOMAIN silently breaks
+# invitation links and passkeys. Fail here instead of in a container restart
+# loop. Only lengths and the scheme are asserted - the values themselves stay
+# out of the output, the private key included.
+- name: Validate Vaultwarden settings
+  ansible.builtin.assert:
+    that:
+      - vaultwarden_domain | length > 0
+      - vaultwarden_domain is match('https://')
+      - vaultwarden_tls_cert | length > 0
+      - vaultwarden_tls_key | length > 0
+    fail_msg: >-
+      vaultwarden_domain must be the external https:// URL clients use, including
+      the port when it is not 443 (e.g. https://vault.example.com:8443), and
+      vaultwarden_tls_cert / vaultwarden_tls_key must hold the PEM certificate
+      chain and its private key.
+
+# The data directory holds the SQLite database, the attachments and the RSA keys
+# Vaultwarden signs its tokens with, so it stays root-only; the container runs as
+# root and reads it through the bind mount.
+- name: Create Vaultwarden directory tree
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - path: "{{ vaultwarden_dir }}"
+      mode: "0750"
+    - path: "{{ vaultwarden_dir }}/data"
+      mode: "0700"
+    - path: "{{ vaultwarden_dir }}/ssl"
+      mode: "0700"
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Install Vaultwarden TLS certificate
+  ansible.builtin.copy:
+    content: "{{ vaultwarden_tls_cert }}"
+    dest: "{{ vaultwarden_dir }}/ssl/cert.pem"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart vaultwarden
+
+- name: Install Vaultwarden TLS private key
+  ansible.builtin.copy:
+    content: "{{ vaultwarden_tls_key }}"
+    dest: "{{ vaultwarden_dir }}/ssl/key.pem"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  notify: Restart vaultwarden
+
+# No handler: a changed value here changes the service's resolved compose
+# config, so 2_install.yml's `up` recreates the container on its own (a plain
+# restart would not re-read .env anyway).
+- name: Render Vaultwarden secrets env file
+  ansible.builtin.template:
+    src: vaultwarden.env.j2
+    dest: "{{ vaultwarden_dir }}/.env"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Render Vaultwarden compose file
+  ansible.builtin.template:
+    src: compose.yaml.j2
+    dest: "{{ vaultwarden_dir }}/compose.yaml"
+    owner: root
+    group: root
+    mode: "0644"

@@ -1,0 +1,41 @@
+---
+# Container image and tag for the Vaultwarden stack
+vaultwarden_image: "vaultwarden/server"
+vaultwarden_version_tag: "latest"
+
+# Where the compose project, the SQLite database and the TLS material live
+vaultwarden_dir: "/containers/vaultwarden"
+
+# Bring the stack up with `docker compose`. Set false to render the configuration
+# only - that is what the molecule scenario does, since the test container has no
+# docker daemon.
+vaultwarden_deploy: true
+
+# Host IP and port the web vault is published on. Vaultwarden terminates TLS
+# itself, so this is an HTTPS port. Docker publishes via DNAT and bypasses UFW's
+# INPUT chain, so this binding - not the firewall - is what limits who can reach
+# the vault; use an internal address (e.g. wg0's) to make it VPN-only.
+vaultwarden_bind_ip: "0.0.0.0"
+vaultwarden_https_port: 443
+
+# External URL clients use, including the port when it is not 443, e.g.
+# https://vault.example.com:8443. Ends up in invitation and password-reset mails
+# and is the WebAuthn/passkey origin, so it has to match what the browser shows.
+# No default - set it in inventory.
+vaultwarden_domain: ""
+
+# TLS certificate chain and its private key, in PEM. Both are required: the
+# clients refuse plain HTTP on anything but localhost. Put the key in vault.
+vaultwarden_tls_cert: ""
+vaultwarden_tls_key: ""
+
+# Account handling. Signups are closed by default, so the vault is not open to
+# anyone who can reach the port; invitations still let an existing user (or the
+# admin panel) add people.
+vaultwarden_signups_allowed: false
+vaultwarden_invitations_allowed: true
+
+# Token for the /admin panel (user management, diagnostics). Empty (default)
+# leaves the panel disabled. Put it in vault; see the README for how to generate
+# one.
+vaultwarden_admin_token: ""
