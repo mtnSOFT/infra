@@ -1,0 +1,35 @@
+#!/bin/sh
+# Ansible managed - Vaultwarden backup.
+#
+# Takes an online copy of the SQLite database plus everything else in the data
+# directory, writes it as one timestamped tarball and prunes the oldest ones.
+# Silent on success, so cron only mails when something breaks.
+set -eu
+
+DATA="{{ vaultwarden_dir }}/data"
+BACKUP="{{ vaultwarden_backup_dir }}"
+KEEP={{ vaultwarden_backup_keep }}
+
+# The archive holds the RSA keys that sign login tokens and every attachment -
+# 0600, like the database it comes from.
+umask 077
+
+work="$(mktemp -d "$BACKUP/.tmp-XXXXXX")"
+trap 'rm -rf "$work"' EXIT
+
+# .backup is SQLite's online backup API: a consistent copy even while the
+# container is writing. Copying the live file instead can tear it.
+sqlite3 "$DATA/db.sqlite3" ".backup '$work/db.sqlite3'"
+
+# Everything else in data/ is plain files - attachments, sends, the RSA keys and
+# config.json from the admin panel. The live database and its WAL/SHM sidecars
+# are excluded; the consistent copy above takes their place.
+tar -czf "$BACKUP/vaultwarden-$(date +%Y%m%d-%H%M%S).tar.gz" \
+  --exclude=./db.sqlite3 --exclude='./db.sqlite3-*' \
+  -C "$DATA" . \
+  -C "$work" db.sqlite3
+
+# Keep the newest {{ vaultwarden_backup_keep }} archives, drop the rest.
+ls -1t "$BACKUP"/vaultwarden-*.tar.gz 2>/dev/null \
+  | tail -n +$((KEEP + 1)) \
+  | xargs -r rm -f

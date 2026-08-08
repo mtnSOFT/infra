@@ -39,3 +39,17 @@ vaultwarden_invitations_allowed: true
 # leaves the panel disabled. Put it in vault; see the README for how to generate
 # one.
 vaultwarden_admin_token: ""
+
+# Daily backup: an online SQLite copy plus the rest of the data directory, as one
+# timestamped tarball. Set false to remove the cron job again (the script and the
+# archives already taken are left alone).
+vaultwarden_backup_enabled: true
+vaultwarden_backup_dir: "{{ vaultwarden_dir }}/backup"
+vaultwarden_backup_script: "/usr/local/bin/vaultwarden-backup.sh"
+
+# How many archives to keep - the oldest are pruned after every run.
+vaultwarden_backup_keep: 10
+
+# When the backup runs (host time). Nightly by default.
+vaultwarden_backup_hour: "3"
+vaultwarden_backup_minute: "30"

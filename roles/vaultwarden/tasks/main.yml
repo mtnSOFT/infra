@@ -7,3 +7,6 @@
 
 - import_tasks: 2_install.yml
   tags: [install]
+
+- import_tasks: 3_backup.yml
+  tags: [backup]
