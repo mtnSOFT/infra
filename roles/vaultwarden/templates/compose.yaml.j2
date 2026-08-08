@@ -1,0 +1,32 @@
+# Ansible managed
+#
+# Vaultwarden terminates TLS itself (ROCKET_TLS), so the published port is HTTPS
+# and there is no reverse proxy in front of it. Docker publishes via DNAT and
+# bypasses UFW's INPUT chain, so vaultwarden_bind_ip is the access control.
+services:
+  vaultwarden:
+    container_name: vaultwarden
+    image: {{ vaultwarden_image }}:{{ vaultwarden_version_tag }}
+    environment:
+      TZ: "{{ timezone | default('UTC') }}"
+      # External URL clients use. It goes into invitation and password-reset
+      # links and is the passkey/WebAuthn origin, so it has to include the port
+      # when that is not 443.
+      DOMAIN: "{{ vaultwarden_domain }}"
+      # Serve HTTPS straight from the mounted certificate. Rocket reads both
+      # files once at startup - a renewed certificate needs a restart.
+      ROCKET_TLS: '{certs="/ssl/cert.pem",key="/ssl/key.pem"}'
+      # No DATABASE_URL: Vaultwarden then uses SQLite at /data/db.sqlite3.
+      SIGNUPS_ALLOWED: "{{ vaultwarden_signups_allowed | bool | string | lower }}"
+      INVITATIONS_ALLOWED: "{{ vaultwarden_invitations_allowed | bool | string | lower }}"
+{% if vaultwarden_admin_token | length > 0 %}
+      # /admin panel token (interpolated from the .env file next to this
+      # compose). Omitted entirely when no token is set, which disables the panel.
+      ADMIN_TOKEN: "${VAULTWARDEN_ADMIN_TOKEN}"
+{% endif %}
+    volumes:
+      - "{{ vaultwarden_dir }}/data:/data"
+      - "{{ vaultwarden_dir }}/ssl:/ssl:ro"
+    ports:
+      - "{{ vaultwarden_bind_ip }}:{{ vaultwarden_https_port }}:80"
+    restart: unless-stopped

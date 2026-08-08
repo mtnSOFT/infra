@@ -1,0 +1,18 @@
+---
+# The test container has no docker daemon, so the stack is not brought up - the
+# scenario verifies the rendered configuration, which is where the role's logic
+# lives.
+vaultwarden_deploy: false
+
+# From vault.yml next to this file, so the scenario exercises the same vault_*
+# indirection production uses. The certificate there is a throwaway self-signed
+# pair for vault.example.com, generated for these tests only.
+vaultwarden_tls_cert: "{{ vault_vaultwarden_tls_cert }}"
+vaultwarden_tls_key: "{{ vault_vaultwarden_tls_key }}"
+vaultwarden_admin_token: "{{ vault_vaultwarden_admin_token }}"
+
+# Non-default values so the optional template branches are actually asserted: a
+# custom HTTPS port bound to a single IP, with that port carried in the domain.
+vaultwarden_domain: "https://vault.example.com:8443"
+vaultwarden_bind_ip: "10.10.0.1"
+vaultwarden_https_port: 8443

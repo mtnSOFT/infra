@@ -1,0 +1,7 @@
+---
+- name: Apply vaultwarden role
+  hosts: vaultwarden
+  become: true
+  roles:
+    - docker-compose
+    - vaultwarden

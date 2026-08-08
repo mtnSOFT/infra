@@ -12,3 +12,6 @@ testhost-ubuntu-24.04
 
 [monitoring]
 testhost-ubuntu-24.04
+
+[vaultwarden]
+testhost-ubuntu-24.04
