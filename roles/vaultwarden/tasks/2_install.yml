@@ -1,0 +1,8 @@
+---
+- name: Deploy Vaultwarden container stack
+  community.docker.docker_compose_v2:
+    project_src: "{{ vaultwarden_dir }}"
+    state: present
+    pull: always
+    remove_orphans: true
+  when: vaultwarden_deploy | bool
