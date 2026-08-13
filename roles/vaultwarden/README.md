@@ -23,12 +23,16 @@ password manager) as a Docker Compose stack. Needs the
   token is interpolated from a `0600` `.env` next to the compose file, never
   inlined into `compose.yaml`
 - Installs `/usr/local/bin/vaultwarden-backup.sh` and a **daily cron job**
-  (03:30 by default) that writes one timestamped `0600` tarball per run into
-  `{{ vaultwarden_backup_dir }}` (default `{{ vaultwarden_dir }}/backup`) and
+  (03:30 by default) that writes one timestamped `0640` tarball per run into the
+  setgid `{{ vaultwarden_backup_dir }}` (default `{{ vaultwarden_dir }}/backup`,
+  `2750 root:root` until a standby's account owns the group) and
   keeps the newest `vaultwarden_backup_keep` (default 10), pruning the rest.
   The database is copied with SQLite's online backup API, so the stack keeps
   running; attachments, sends, `config.json` and the RSA token signing keys go
   into the same archive
+- Optionally keeps a **second site** in step: a standby host renders the same
+  stack but leaves it stopped, pulls the primary's archives over SSH nightly and
+  unpacks the newest into its data directory — see [Second site](#second-site)
 
 ## Gotchas
 
@@ -63,9 +67,17 @@ password manager) as a Docker Compose stack. Needs the
   (`docker run --rm -it vaultwarden/server /vaultwarden hash`), double every `$`
   in the value — `docker compose` interpolates `.env` and would otherwise eat
   parts of the Argon2 string.
-- **The backups stay on the same host.** Ten daily tarballs next to the data
-  they came from survive a bad upgrade, not a dead disk — copy
-  `{{ vaultwarden_backup_dir }}` off the machine with whatever does the rest of
+- **Only one instance may ever run.** Vaultwarden has no replication: a write
+  that reaches a second live instance diverges permanently, with no merge path
+  and no warning to the user who loses it. That is why the standby's stack is
+  rendered but stopped, and why the sync script exits untouched if it finds a
+  running container — see [Second site](#second-site).
+- **The standby is a copy, not a mirror.** It is as fresh as the last archive it
+  pulled: worst case a backup interval plus the gap to the sync, so ~24h with the
+  defaults. Vault edits after that are gone if the primary's disk is.
+- **The backups still want to leave the building.** A [second
+  site](#second-site) covers a dead host; two hosts in one rack do not cover the
+  rack. Copy `{{ vaultwarden_backup_dir }}` off with whatever does the rest of
   your off-site backups. The archives are unencrypted: vault *items* are
   end-to-end encrypted, but the token signing keys and attachment metadata in
   there are not.
@@ -79,6 +91,86 @@ password manager) as a Docker Compose stack. Needs the
   tar xzf backup/vaultwarden-<timestamp>.tar.gz -C data
   docker compose up -d
   ```
+
+## Second site
+
+Ten archives next to the data they came from survive a bad upgrade, not a dead
+host. A second host closes that gap: it renders the **identical** stack — same
+`vaultwarden_domain`, certificate and admin token — keeps the container
+**stopped**, and pulls the primary's archives every night, unpacking the newest
+into its data directory. Taking over is `docker compose up -d` plus a DNS
+change; clients and their passkeys see no difference. RPO is one backup
+interval, RTO a minute.
+
+```yaml
+# inventories/production/hosts
+[vaultwarden]
+vault-01
+vault-02
+
+[vaultwarden_standby]
+vault-02
+```
+
+```yaml
+# group_vars/vaultwarden/vars.yml  - shared, and that sameness is the point
+vaultwarden_domain: "https://vault.example.com"
+vaultwarden_tls_cert: "{{ vault_vaultwarden_tls_cert }}"
+vaultwarden_tls_key: "{{ vault_vaultwarden_tls_key }}"
+
+# group_vars/vaultwarden_standby/vars.yml
+vaultwarden_standby: true
+vaultwarden_sync_source: vault-01
+
+# host_vars/vault-01/vars.yml  - the primary serves its archives
+vaultwarden_sync_serve: true
+vaultwarden_sync_from_ip: "10.10.0.9" # optional, pins the key to one address
+```
+
+`ansible-playbook … playbooks/vaultwarden.yml` then converges both sides in one
+run. The two hosts exchange **public** material through
+`{{ vaultwarden_sync_key_dir }}` on the control node
+(`inventories/<env>/vaultwarden_keys/`, the same idiom the
+[wireguard](../wireguard/README.md) role uses for generated configs): the standby
+publishes its sync public key, the primary its SSH host key so the pull runs with
+strict host checking. Both belong in git. Revoking a standby is deleting its
+`.pub` and converging.
+
+On the primary the standby's key is authorised for a `vwsync` account with no
+shell, pinned to `command="rrsync -ro <backup dir>"` — that key yields the
+backups and nothing else on the host. The standby needs to reach
+`sshd_port` there, which is inventory's job via the [ufw](../ufw/README.md) role:
+
+```yaml
+# host_vars/vault-01/vars.yml
+ufw_host_rules:
+  - rule: allow
+    port: "{{ sshd_port }}"
+    proto: tcp
+    from_ip: "10.10.0.9"
+    comment: "Vaultwarden backup sync"
+```
+
+Best run over a private path. This role does not build one: the
+[wireguard](../wireguard/README.md) role here is a road-warrior server, so
+host-to-host means adding the standby as a peer and applying that config
+yourself.
+
+### Promoting the standby
+
+1. **Make sure the primary is really down.** Two running instances diverge
+   permanently — Vaultwarden has no replication and no merge path.
+2. Set `vaultwarden_standby: false` for that host and converge: the sync cron
+   goes away, the stack starts, and its own backup cron takes over. Without
+   Ansible to hand: `docker compose up -d` in `{{ vaultwarden_dir }}` and
+   `crontab -l -u root` to drop the sync job.
+3. Point DNS at the promoted host. Nothing changes for clients.
+4. Failing back: restore the **promoted** host's newest archive onto the repaired
+   primary ([Restoring](#gotchas)), then swap the two hosts in inventory. Never
+   just start the old primary again — its data is stale, and starting it while
+   the other one serves is exactly the split brain above.
+
+Rehearse this once in a maintenance window. An untested failover is a hope.
 
 ## Key variables
 
@@ -107,15 +199,37 @@ password manager) as a Docker Compose stack. Needs the
   happens, in host time (default `3` / `30`)
 - `vaultwarden_backup_script` — path of the rendered script (default
   `/usr/local/bin/vaultwarden-backup.sh`)
+- `vaultwarden_standby` — this host is the second site: stack rendered but not
+  started, archives pulled instead of taken (default `false`)
+- `vaultwarden_sync_serve` — this host serves its archives to a standby (default
+  `false`)
+- `vaultwarden_sync_source` — standby only: inventory hostname of the primary it
+  pulls from (no default)
+- `vaultwarden_sync_keep` — archives kept on the standby (default `30`)
+- `vaultwarden_sync_restore` — unpack the newest archive into `data/` after every
+  pull (default `true`; `false` keeps archives only)
+- `vaultwarden_sync_hour` / `vaultwarden_sync_minute` — when the pull runs
+  (default `4` / `0`, after the primary's backup)
+- `vaultwarden_sync_from_ip` — optional `from=` on the authorised key
+- `vaultwarden_sync_key_dir` — where the two sides exchange public keys (default
+  `{{ inventory_dir }}/vaultwarden_keys`)
+- `vaultwarden_sync_user` / `vaultwarden_sync_group` — restricted account on the
+  primary (default `vwsync`)
+- `vaultwarden_sync_port` / `vaultwarden_sync_address` — SSH port and address of
+  the primary (default `sshd_port` and the source's `ansible_host`)
+- `vaultwarden_sync_key` / `vaultwarden_sync_script` / `vaultwarden_sync_rrsync` —
+  paths of the standby's key, its sync script and the `rrsync` wrapper
 - `timezone` — container timezone (default `UTC`)
 
 ## Usage
 
 `ansible-playbook -i inventories/production/hosts playbooks/vaultwarden.yml`
 
-Targets the `vaultwarden` group. `--tags backup` re-applies just the backup
-script and its cron job; `/usr/local/bin/vaultwarden-backup.sh` also runs by hand
-whenever you want an extra archive (before an image bump, say).
+Targets the `vaultwarden` group — primary and standby together, so one run wires
+both sides up. `--tags backup` / `--tags sync` re-apply just those scripts and
+their cron jobs; `/usr/local/bin/vaultwarden-backup.sh` and
+`/usr/local/bin/vaultwarden-sync.sh` also run by hand whenever you want an extra
+archive or an immediate pull (before an image bump, say).
 
 Configure it in `group_vars/vaultwarden/`:
 

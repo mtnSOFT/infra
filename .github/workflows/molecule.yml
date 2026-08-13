@@ -44,7 +44,9 @@ jobs:
               [ "$name" = "default" ] && continue
               # powerdns temporarily disabled (recursor WIP); remove to re-enable.
               [ "$name" = "powerdns" ] && continue
-              [ -d "roles/$name" ] || continue
+              # A role may have several scenarios, named <role>-<variant>
+              # (e.g. vaultwarden-standby covers the second site).
+              [ -d "roles/${name%%-*}" ] || continue
               echo "$name"
             done
           )
@@ -84,7 +86,7 @@ jobs:
           # Otherwise: a scenario runs if its role or its molecule scenario changed.
           selected=()
           for name in "${ALL[@]}"; do
-            if echo "$changed" | grep -qE "^(roles/${name}/|molecule/${name}/)"; then
+            if echo "$changed" | grep -qE "^(roles/${name%%-*}/|molecule/${name}/)"; then
               selected+=("$name")
             fi
           done

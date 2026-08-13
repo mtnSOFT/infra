@@ -10,3 +10,6 @@
 
 - import_tasks: 3_backup.yml
   tags: [backup]
+
+- import_tasks: 4_sync.yml
+  tags: [sync]

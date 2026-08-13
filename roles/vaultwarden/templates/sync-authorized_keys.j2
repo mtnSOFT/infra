@@ -1,0 +1,9 @@
+# Ansible managed - keys allowed to pull Vaultwarden backup archives.
+#
+# Every key is pinned to a read-only rsync of {{ vaultwarden_backup_dir }}: no
+# shell, no pty, no forwarding, nothing else on this host reachable with it.
+# Keys come from the inventory's vaultwarden_keys directory - a standby is
+# revoked by deleting its <host>.pub there and converging.
+{% for _key_file in query('ansible.builtin.fileglob', vaultwarden_sync_key_dir ~ '/*.pub') | sort %}
+restrict,{% if vaultwarden_sync_from_ip | length > 0 %}from="{{ vaultwarden_sync_from_ip }}",{% endif %}command="{{ vaultwarden_sync_rrsync }} -ro {{ vaultwarden_backup_dir }}" {{ lookup('ansible.builtin.file', _key_file) }}
+{% endfor %}

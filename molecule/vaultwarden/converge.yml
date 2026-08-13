@@ -5,5 +5,33 @@
   hosts: vaultwarden
   become: true
 
+  vars:
+    # Serve the archives to a standby, so the restricted sync account and its
+    # authorised keys are exercised. The key exchange directory is a scratch
+    # path rather than the inventory: the role publishes this host's SSH host
+    # key into it, and a test must not write into the repo.
+    vaultwarden_sync_serve: true
+    vaultwarden_sync_key_dir: "/tmp/molecule-vaultwarden-primary-keys"
+    # Exercise the optional from= restriction on the authorised key
+    vaultwarden_sync_from_ip: "10.10.0.9"
+
+  pre_tasks:
+    - name: Create the key exchange directory
+      ansible.builtin.file:
+        path: "{{ vaultwarden_sync_key_dir }}"
+        state: directory
+        mode: "0755"
+      become: false
+      delegate_to: localhost # DevSkim: ignore DS162092 -- the control node holds the exchanged keys
+
+    # Stands in for a standby having published its key here on its own converge
+    - name: Publish a standby public key for the role to authorise
+      ansible.builtin.copy:
+        src: files/vault-standby.pub
+        dest: "{{ vaultwarden_sync_key_dir }}/vault-standby.pub"
+        mode: "0644"
+      become: false
+      delegate_to: localhost # DevSkim: ignore DS162092 -- the control node holds the exchanged keys
+
   roles:
     - role: vaultwarden

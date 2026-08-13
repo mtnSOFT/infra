@@ -1,0 +1,44 @@
+#!/bin/sh
+# Ansible managed - Vaultwarden second site.
+#
+# Pulls the primary's archives and leaves this host ready to take over: the
+# newest archive is unpacked into the data directory, the stack stays stopped.
+# Silent on success, so cron only mails when something breaks.
+set -eu
+
+SOURCE="{{ vaultwarden_sync_user }}@{{ vaultwarden_sync_address }}"
+COMPOSE="{{ vaultwarden_dir }}/compose.yaml"
+BACKUP="{{ vaultwarden_backup_dir }}"
+DATA="{{ vaultwarden_dir }}/data"
+KEEP={{ vaultwarden_sync_keep }}
+
+umask 027
+
+# Promoted? Then this host owns the live vault, and a cron job nobody remembered
+# to disable must not roll it back to yesterday's archive.
+running="$(docker compose -f "$COMPOSE" ps -q --status running 2>/dev/null || true)"
+if [ -n "$running" ]; then
+  exit 0
+fi
+
+# No --delete: a primary that loses or wipes its own archives must not take this
+# copy with it. Ownership stays local - the sync account does not exist here.
+rsync -a --no-owner --no-group \
+  -e "ssh -p {{ vaultwarden_sync_port }} -i {{ vaultwarden_sync_key }} -o StrictHostKeyChecking=yes" \
+  "$SOURCE:/" "$BACKUP/"
+
+{% if vaultwarden_sync_restore | bool %}
+# Unpack the newest archive, so promotion is only `docker compose up -d`. The
+# WAL/SHM sidecars belong to the database being replaced and have to go with it.
+newest="$(ls -1t "$BACKUP"/vaultwarden-*.tar.gz 2>/dev/null | head -1)"
+if [ -n "$newest" ]; then
+  rm -f "$DATA/db.sqlite3" "$DATA/db.sqlite3-wal" "$DATA/db.sqlite3-shm"
+  tar xzf "$newest" -C "$DATA"
+  date -u +%Y-%m-%dT%H:%M:%SZ > "{{ vaultwarden_dir }}/.last-sync"
+fi
+{% endif %}
+
+# Retention here is this host's own: the copy that outlives a bad primary.
+ls -1t "$BACKUP"/vaultwarden-*.tar.gz 2>/dev/null \
+  | tail -n +$((KEEP + 1)) \
+  | xargs -r rm -f

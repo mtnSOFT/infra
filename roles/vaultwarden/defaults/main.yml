@@ -42,8 +42,9 @@ vaultwarden_admin_token: ""
 
 # Daily backup: an online SQLite copy plus the rest of the data directory, as one
 # timestamped tarball. Set false to remove the cron job again (the script and the
-# archives already taken are left alone).
-vaultwarden_backup_enabled: true
+# archives already taken are left alone). A standby has no live database of its
+# own and must not overwrite what it pulled, so it never backs up.
+vaultwarden_backup_enabled: "{{ not vaultwarden_standby | bool }}"
 vaultwarden_backup_dir: "{{ vaultwarden_dir }}/backup"
 vaultwarden_backup_script: "/usr/local/bin/vaultwarden-backup.sh"
 
@@ -53,3 +54,61 @@ vaultwarden_backup_keep: 10
 # When the backup runs (host time). Nightly by default.
 vaultwarden_backup_hour: "3"
 vaultwarden_backup_minute: "30"
+
+# Group that owns the archives. Serving them to a standby means the sync account
+# has to read them without being root; on a host that serves nobody this stays
+# root, which is what the setgid 2750 directory already restricts them to.
+vaultwarden_backup_group: "{{ vaultwarden_sync_group if vaultwarden_sync_serve | bool else 'root' }}"
+
+# --- Second site -------------------------------------------------------------
+# One primary serves its archives (vaultwarden_sync_serve) and one standby pulls
+# them (vaultwarden_standby). The standby renders the same stack - same domain,
+# certificate and admin token - but keeps it stopped, so promoting it is a single
+# `docker compose up -d`. Never run both: Vaultwarden has no replication, and two
+# live instances diverge with no way back.
+vaultwarden_standby: false
+vaultwarden_sync_serve: false
+
+# Standby only: which host to pull from. The inventory hostname of the primary;
+# its ansible_host is used as the address when set.
+vaultwarden_sync_source: ""
+vaultwarden_sync_address: "{{ hostvars[vaultwarden_sync_source].ansible_host | default(vaultwarden_sync_source) }}"
+vaultwarden_sync_port: "{{ sshd_port | default(22) }}"
+
+# Restricted account on the primary that the standby rsyncs from. It gets no
+# shell: every authorised key is pinned to a read-only rsync of the archives.
+vaultwarden_sync_user: "vwsync"
+vaultwarden_sync_group: "vwsync"
+vaultwarden_sync_rrsync: "/usr/bin/rrsync"
+
+# Where the two sides exchange public material on the control node: the standby
+# publishes <host>.pub (its sync key), the primary <host>.hostkey (its SSH host
+# key, so the pull runs with strict host checking). Same idea as the wireguard
+# role's generated configs - only public material, and revoking a standby is
+# deleting its .pub. Add "^vaultwarden_keys/.*$" to inventory_ignore_patterns.
+vaultwarden_sync_key_dir: "{{ inventory_dir }}/vaultwarden_keys"
+vaultwarden_sync_key: "/root/.ssh/vaultwarden-sync"
+vaultwarden_sync_script: "/usr/local/bin/vaultwarden-sync.sh"
+
+# Derived: the primary's published host key, and the name ssh looks it up under
+# in known_hosts ("[host]:port" whenever the port is not 22).
+vaultwarden_sync_host_key_file: "{{ vaultwarden_sync_key_dir }}/{{ vaultwarden_sync_source }}.hostkey"
+vaultwarden_sync_known_hosts_name: >-
+  {{ vaultwarden_sync_address
+     if (vaultwarden_sync_port | int) == 22
+     else '[' ~ vaultwarden_sync_address ~ ']:' ~ vaultwarden_sync_port }}
+
+# Archives kept on the standby, pruned like the primary's but independently - it
+# is the copy that outlives a bad primary, so it may keep more.
+vaultwarden_sync_keep: 30
+
+# Unpack the newest archive into data/ after every pull, so the standby is ready
+# to start. False keeps the archives only, restore stays manual.
+vaultwarden_sync_restore: true
+
+# Optional from="..." on the authorised key, restricting where it may be used.
+vaultwarden_sync_from_ip: ""
+
+# When the pull runs (host time) - after the primary's backup.
+vaultwarden_sync_hour: "4"
+vaultwarden_sync_minute: "0"

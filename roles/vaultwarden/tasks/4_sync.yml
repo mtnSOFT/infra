@@ -1,0 +1,173 @@
+---
+# Second site. The standby pulls the primary's archives over SSH and keeps its
+# data directory ready, so taking over is one `docker compose up -d`.
+#
+# The two sides exchange public material through vaultwarden_sync_key_dir on the
+# control node - the standby publishes its sync key, the primary its SSH host
+# key. Ansible runs every task across all hosts before moving to the next, so a
+# single run over both hosts wires this up; separate runs work too, because the
+# files persist between them.
+
+- name: Validate Vaultwarden sync settings
+  ansible.builtin.assert:
+    that:
+      - vaultwarden_sync_source | length > 0
+      - not (vaultwarden_standby | bool and vaultwarden_sync_serve | bool)
+    fail_msg: >-
+      A standby needs vaultwarden_sync_source set to the primary it pulls from,
+      and no host can be both the standby and the primary serving it.
+  when: vaultwarden_standby | bool
+
+# --- standby: the key it pulls with ------------------------------------------
+
+- name: Ensure the sync client packages are installed
+  ansible.builtin.apt:
+    name:
+      - rsync
+      - openssh-client
+    state: present
+    update_cache: true
+    cache_valid_time: "3600"
+  when: vaultwarden_standby | bool
+
+- name: Create the sync key directory
+  ansible.builtin.file:
+    path: "{{ vaultwarden_sync_key | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  when: vaultwarden_standby | bool
+
+- name: Create the Vaultwarden sync key pair
+  ansible.builtin.command:
+    cmd: >-
+      ssh-keygen -t ed25519 -N ""
+      -C "vaultwarden-sync {{ inventory_hostname }}"
+      -f {{ vaultwarden_sync_key }}
+    creates: "{{ vaultwarden_sync_key }}"
+  when: vaultwarden_standby | bool
+
+# Onto the control node, where the primary picks it up below. Public key only.
+- name: Publish the sync public key to the inventory
+  ansible.builtin.fetch:
+    src: "{{ vaultwarden_sync_key }}.pub"
+    dest: "{{ vaultwarden_sync_key_dir }}/{{ inventory_hostname }}.pub"
+    flat: true
+  when: vaultwarden_standby | bool
+
+# --- primary: the account that serves the archives ---------------------------
+
+- name: Ensure rsync is installed
+  ansible.builtin.apt:
+    name: rsync
+    state: present
+    update_cache: true
+    cache_valid_time: "3600"
+  when: vaultwarden_sync_serve | bool
+
+# Every authorised key is pinned to this wrapper, so a wrong path would mean the
+# pull fails nightly instead of at converge time.
+- name: Check the rsync forced-command wrapper is present
+  ansible.builtin.stat:
+    path: "{{ vaultwarden_sync_rrsync }}"
+  register: vaultwarden_rrsync_stat
+  when: vaultwarden_sync_serve | bool
+
+- name: Fail when the rsync forced-command wrapper is missing
+  ansible.builtin.assert:
+    that:
+      - vaultwarden_rrsync_stat.stat.exists
+    fail_msg: >-
+      {{ vaultwarden_sync_rrsync }} not found. It ships with rsync on Ubuntu;
+      point vaultwarden_sync_rrsync at it if this host keeps it elsewhere.
+  when: vaultwarden_sync_serve | bool
+
+# No shell and no home worth reaching: the forced command in authorized_keys is
+# the only thing this account can do. Its group owns the archives (see
+# vaultwarden_backup_group), which is how it reads them without being root.
+- name: Create the Vaultwarden sync account
+  ansible.builtin.user:
+    name: "{{ vaultwarden_sync_user }}"
+    group: "{{ vaultwarden_sync_group }}"
+    system: true
+    shell: /usr/sbin/nologin
+    home: "/var/lib/{{ vaultwarden_sync_user }}"
+    create_home: true
+  when: vaultwarden_sync_serve | bool
+
+- name: Create the sync account's .ssh directory
+  ansible.builtin.file:
+    path: "/var/lib/{{ vaultwarden_sync_user }}/.ssh"
+    state: directory
+    owner: "{{ vaultwarden_sync_user }}"
+    group: "{{ vaultwarden_sync_group }}"
+    mode: "0700"
+  when: vaultwarden_sync_serve | bool
+
+# Ansible owns this file: deleting a standby's .pub from the inventory revokes
+# its access on the next converge.
+- name: Authorise the published standby keys
+  ansible.builtin.template:
+    src: sync-authorized_keys.j2
+    dest: "/var/lib/{{ vaultwarden_sync_user }}/.ssh/authorized_keys"
+    owner: "{{ vaultwarden_sync_user }}"
+    group: "{{ vaultwarden_sync_group }}"
+    mode: "0600"
+  when: vaultwarden_sync_serve | bool
+
+# So the standby can pin this host's identity instead of trusting it blindly.
+- name: Publish the SSH host key to the inventory
+  ansible.builtin.fetch:
+    src: /etc/ssh/ssh_host_ed25519_key.pub
+    dest: "{{ vaultwarden_sync_key_dir }}/{{ inventory_hostname }}.hostkey"
+    flat: true
+  when: vaultwarden_sync_serve | bool
+
+# --- standby: trust, script, schedule ----------------------------------------
+
+- name: Trust the primary's SSH host key
+  ansible.builtin.known_hosts:
+    path: /root/.ssh/known_hosts
+    name: "{{ vaultwarden_sync_known_hosts_name }}"
+    key: >-
+      {{ vaultwarden_sync_known_hosts_name }}
+      {{ vaultwarden_sync_host_key.split()[0] }}
+      {{ vaultwarden_sync_host_key.split()[1] }}
+    state: present
+  vars:
+    vaultwarden_sync_host_key: "{{ lookup('ansible.builtin.file', vaultwarden_sync_host_key_file) }}"
+  when:
+    - vaultwarden_standby | bool
+    - vaultwarden_sync_host_key_file is exists
+
+# The rsync target, which 3_backup.yml does not create here - a standby takes no
+# backups of its own.
+- name: Create the Vaultwarden archive directory
+  ansible.builtin.file:
+    path: "{{ vaultwarden_backup_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  when: vaultwarden_standby | bool
+
+- name: Create the Vaultwarden sync script
+  ansible.builtin.template:
+    src: vaultwarden-sync.sh.j2
+    dest: "{{ vaultwarden_sync_script }}"
+    owner: root
+    group: root
+    mode: "0700"
+  when: vaultwarden_standby | bool
+
+# Removed again once the host stops being a standby, which is what promoting it
+# does - otherwise the next run would roll the freshly promoted vault back.
+- name: Schedule daily Vaultwarden sync
+  ansible.builtin.cron:
+    name: "Vaultwarden sync"
+    minute: "{{ vaultwarden_sync_minute }}"
+    hour: "{{ vaultwarden_sync_hour }}"
+    job: "{{ vaultwarden_sync_script }}"
+    user: root
+    state: "{{ 'present' if vaultwarden_standby | bool else 'absent' }}"

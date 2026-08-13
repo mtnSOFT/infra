@@ -10,9 +10,10 @@ DATA="{{ vaultwarden_dir }}/data"
 BACKUP="{{ vaultwarden_backup_dir }}"
 KEEP={{ vaultwarden_backup_keep }}
 
-# The archive holds the RSA keys that sign login tokens and every attachment -
-# 0600, like the database it comes from.
-umask 077
+# The archive holds the RSA keys that sign login tokens and every attachment, so
+# it stays inside the backup directory's group - 0640, and the setgid directory
+# decides who that group is (root, or the sync account when a standby pulls).
+umask 027
 
 work="$(mktemp -d "$BACKUP/.tmp-XXXXXX")"
 trap 'rm -rf "$work"' EXIT

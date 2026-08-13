@@ -114,13 +114,13 @@ def test_database_is_sqlite(host):
 
 
 def test_backup_directory_and_script(host):
-    # The archives hold the token signing keys and every attachment, so both the
-    # directory and the script that writes it stay root-only.
+    # Setgid, so archives inherit the group the sync account reads them through;
+    # nothing outside that group gets in, and the script stays root-only.
     backup = host.file(BACKUP)
     assert backup.is_directory
     assert backup.user == "root"
-    assert backup.group == "root"
-    assert backup.mode == 0o700
+    assert backup.group == "vwsync"
+    assert backup.mode == 0o2750
 
     script = host.file(SCRIPT)
     assert script.exists
@@ -164,7 +164,12 @@ def test_backup_archives_the_data_and_keeps_the_last_ten(host):
     assert f"{BACKUP}/vaultwarden-20200112-000000.tar.gz" in archives
     assert f"{BACKUP}/vaultwarden-20200101-000000.tar.gz" not in archives
 
-    assert host.file(newest).mode == 0o600
+    # 0640 in a setgid directory: readable by the sync account's group, nobody
+    # else, without the script knowing anything about the second site.
+    archive = host.file(newest)
+    assert archive.mode == 0o640
+    assert archive.group == "vwsync"
+
     members = host.check_output(f"tar tzf {newest}").split()
     assert "./attachments/x.bin" in members
     # The consistent copy sits at the archive root; the live database and its
@@ -178,6 +183,33 @@ def test_backup_archives_the_data_and_keeps_the_last_ten(host):
         "sqlite3 $tmp/db.sqlite3 'select count(*) from t'"
     )
     assert restored == "1"
+
+
+def test_sync_account_can_only_read_the_archives(host):
+    # The standby pulls as this account. No shell, and its group is the one the
+    # archives are written into.
+    passwd = host.check_output("getent passwd vwsync")
+    assert passwd.endswith("/usr/sbin/nologin")
+    assert host.check_output("id -gn vwsync") == "vwsync"
+
+    keys = host.file("/var/lib/vwsync/.ssh/authorized_keys")
+    assert keys.user == "vwsync"
+    assert keys.mode == 0o600
+
+    lines = [
+        line
+        for line in keys.content_string.splitlines()
+        if line and not line.startswith("#")
+    ]
+    # One line: the standby key the converge published into the exchange dir
+    assert len(lines) == 1
+    # Pinned to a read-only rsync of the archives, from one address, with no pty
+    # or forwarding - an attacker with this key gets backups, not the host.
+    assert lines[0].startswith(
+        'restrict,from="10.10.0.9",'
+        f'command="/usr/bin/rrsync -ro {BACKUP}" ssh-ed25519 '
+    )
+    assert "vaultwarden-sync vault-standby" in lines[0]
 
 
 def test_account_handling(host):
