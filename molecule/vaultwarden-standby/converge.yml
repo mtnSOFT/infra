@@ -1,0 +1,36 @@
+---
+# Second site. The standby renders the same stack as the primary - same domain,
+# certificate and admin token from inventories/test/group_vars/vaultwarden/ - but
+# keeps it stopped and pulls the primary's archives instead of taking its own.
+- name: Converge
+  hosts: vaultwarden
+  become: true
+
+  vars:
+    vaultwarden_standby: true
+    # The primary this host would pull from. Deliberately not in the inventory,
+    # so the address falls back to the name and nothing is contacted: the
+    # scenario verifies what gets rendered, not a live transfer.
+    vaultwarden_sync_source: "vault-01.example.com"
+    vaultwarden_sync_key_dir: "/tmp/molecule-vaultwarden-standby-keys"
+
+  pre_tasks:
+    - name: Create the key exchange directory
+      ansible.builtin.file:
+        path: "{{ vaultwarden_sync_key_dir }}"
+        state: directory
+        mode: "0755"
+      become: false
+      delegate_to: localhost # DevSkim: ignore DS162092 -- the control node holds the exchanged keys
+
+    # Stands in for the primary having published its host key on its own converge
+    - name: Publish the primary's SSH host key
+      ansible.builtin.copy:
+        src: files/vault-01.example.com.hostkey
+        dest: "{{ vaultwarden_sync_key_dir }}/vault-01.example.com.hostkey"
+        mode: "0644"
+      become: false
+      delegate_to: localhost # DevSkim: ignore DS162092 -- the control node holds the exchanged keys
+
+  roles:
+    - role: vaultwarden

@@ -1,0 +1,64 @@
+---
+# sqlite3 for the online backup API (the container image does not ship the CLI),
+# cron to run the job - neither is guaranteed to be on a minimal install.
+- name: Ensure the backup dependencies are installed
+  ansible.builtin.apt:
+    name:
+      - sqlite3
+      - cron
+    state: present
+    update_cache: true
+    cache_valid_time: "3600"
+  when: vaultwarden_backup_enabled | bool
+
+# Exists already when it is root; a no-op then, and the group the sync account
+# belongs to when this host serves a standby.
+- name: Ensure the backup group exists
+  ansible.builtin.group:
+    name: "{{ vaultwarden_backup_group }}"
+    system: true
+  when: vaultwarden_backup_enabled | bool
+
+# Archives hold the RSA token signing keys and every attachment, so nothing
+# outside the group gets in. Setgid: archives written here inherit the group, so
+# the sync account can read them without the script knowing anything about it.
+- name: Create Vaultwarden backup directory
+  ansible.builtin.file:
+    path: "{{ vaultwarden_backup_dir }}"
+    state: directory
+    owner: root
+    group: "{{ vaultwarden_backup_group }}"
+    mode: "2750"
+  when: vaultwarden_backup_enabled | bool
+
+# Archives taken before this host started serving a standby predate the setgid
+# bit, so they are still root:root and unreadable to the sync account.
+- name: Align existing archives with the backup group
+  ansible.builtin.file:
+    path: "{{ vaultwarden_backup_dir }}"
+    state: directory
+    group: "{{ vaultwarden_backup_group }}"
+    recurse: true
+  when:
+    - vaultwarden_backup_enabled | bool
+    - vaultwarden_sync_serve | bool
+
+- name: Create Vaultwarden backup script
+  ansible.builtin.template:
+    src: vaultwarden-backup.sh.j2
+    dest: "{{ vaultwarden_backup_script }}"
+    owner: root
+    group: root
+    mode: "0700"
+  when: vaultwarden_backup_enabled | bool
+
+# Removed again when vaultwarden_backup_enabled is turned off, so disabling
+# backups actually stops them - the script and the archives stay put.
+- name: Schedule daily Vaultwarden backup
+  ansible.builtin.cron:
+    name: "Vaultwarden backup"
+    minute: "{{ vaultwarden_backup_minute }}"
+    hour: "{{ vaultwarden_backup_hour }}"
+    job: "{{ vaultwarden_backup_script }}"
+    user: root
+    state: "{{ 'present' if vaultwarden_backup_enabled | bool else 'absent' }}"

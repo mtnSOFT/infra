@@ -1,0 +1,10 @@
+---
+# docker_compose_v2 recreates the container when compose.yaml changes, but it
+# does not notice a new certificate in the bind-mounted ssl directory - Rocket
+# reads cert and key once at startup, so a renewal needs an explicit restart.
+- name: Restart vaultwarden
+  community.docker.docker_compose_v2:
+    project_src: "{{ vaultwarden_dir }}"
+    state: restarted
+    services: [vaultwarden]
+  when: vaultwarden_deploy | bool

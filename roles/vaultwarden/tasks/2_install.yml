@@ -1,0 +1,12 @@
+---
+# The standby renders the identical stack but never runs it - promotion is
+# `docker compose up -d` on that host. `restart: unless-stopped` leaves an
+# explicitly stopped container stopped across a reboot, so nothing starts it by
+# accident.
+- name: Deploy Vaultwarden container stack
+  community.docker.docker_compose_v2:
+    project_src: "{{ vaultwarden_dir }}"
+    state: "{{ 'stopped' if vaultwarden_standby | bool else 'present' }}"
+    pull: always
+    remove_orphans: true
+  when: vaultwarden_deploy | bool
