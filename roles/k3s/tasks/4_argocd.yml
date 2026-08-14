@@ -1,10 +1,8 @@
 ---
 - name: only when k3s master
   block:
-    - name: set argocd version
-      set_fact:
-        argocd_version: "stable"
-
+    # argocd_version comes from the role defaults, where it is pinned and
+    # annotated for Renovate. It used to be set to the floating "stable" tag here.
     - name: Create argocd namespace
       kubernetes.core.k8s:
         name: argocd

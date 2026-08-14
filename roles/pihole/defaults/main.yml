@@ -1,7 +1,19 @@
 ---
-# Container image and tag for the Pi-hole stack
+# Container image and tag for the Pi-hole stack. The tag is pinned here and not
+# in inventory, because inventories/production lives outside this repository and
+# Renovate cannot see it - a pin it cannot see is a pin it cannot update.
+#
+# The `# renovate:` annotation names the image the tag belongs to; if you change
+# pihole_image, change the depName in the comment to match.
+#
+# Pi-hole uses date-based tags (2026.07.2). Pinned 2026-08-14 from the
+# then-current upstream release - confirm against `playbooks/report_versions.yml`
+# before the first apply. If a host is still on a pre-v6 image, moving to this tag
+# crosses the Pi-hole v6 rewrite, which changed the configuration handling this
+# role drives through the container environment. Treat that as a project.
 pihole_image: "pihole/pihole"
-pihole_version_tag: "latest"
+# renovate: datasource=docker depName=pihole/pihole
+pihole_version_tag: "2026.07.2"
 
 # Where the compose project and its persistent /etc/pihole volume live
 pihole_dir: "/containers/pihole"
