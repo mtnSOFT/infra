@@ -5,5 +5,33 @@
   hosts: gitea
   become: true
 
+  pre_tasks:
+    # Stand-ins for the certificate a manual copy or an ACME service puts on the
+    # host: the role only mounts them, so the content is irrelevant here - the
+    # paths and the permissions are what it checks. Owner/mode match what the
+    # README asks for, so this also covers the readability assertion.
+    - name: Create the TLS directory for testing
+      ansible.builtin.file:
+        path: /etc/ssl/gitea
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Create a placeholder certificate and key for testing
+      ansible.builtin.copy:
+        content: "molecule placeholder - gitea is not started in this scenario\n"
+        dest: "/etc/ssl/gitea/{{ item.name }}"
+        owner: root
+        group: "1000"
+        mode: "{{ item.mode }}"
+      loop:
+        - name: fullchain.pem
+          mode: "0644"
+        - name: privkey.pem
+          mode: "0640"
+      loop_control:
+        label: "{{ item.name }}"
+
   roles:
     - role: gitea

@@ -58,8 +58,9 @@ def test_compose_file(host):
     # bumping gitea_version_tag does not mean editing this test.
     assert re.fullmatch(r"gitea/gitea:\d+\.\d+\.\d+", gitea["image"])
     assert gitea["restart"] == "unless-stopped"
-    # Everything persistent is in the one data volume
-    assert gitea["volumes"] == [f"{BASE}/data:/data"]
+    # Everything persistent is in the one data volume; the certificate is mounted
+    # read-only next to it (asserted in detail below)
+    assert gitea["volumes"][0] == f"{BASE}/data:/data"
     # Compose owns the container name (gitea-gitea-1), so it cannot collide with
     # a container outside this project
     assert "container_name" not in gitea
@@ -82,6 +83,25 @@ def test_domain_is_derived_from_the_root_url(host):
     env = _gitea_env(host)
     assert env["GITEA__server__ROOT_URL"] == "https://git.example.com/"
     assert env["GITEA__server__DOMAIN"] == "git.example.com"
+
+
+def test_https_is_served_by_gitea_itself(host):
+    # gitea_tls_cert_file / gitea_tls_key_file are set in the test inventory. The
+    # HTTP-only branch (both unset, no PROTOCOL key) cannot be reached in the same
+    # scenario, which needs a certificate present to assert the mounts.
+    env = _gitea_env(host)
+    assert env["GITEA__server__PROTOCOL"] == "https"
+    assert env["GITEA__server__CERT_FILE"] == "/certs/tls.crt"
+    assert env["GITEA__server__KEY_FILE"] == "/certs/tls.key"
+
+
+def test_certificate_is_mounted_read_only_from_the_host(host):
+    # Mounted, never copied, so renewing it is the certificate owner's job - and
+    # outside /data, which the image chowns on every start.
+    assert _gitea(host)["volumes"][1:] == [
+        "/etc/ssl/gitea/fullchain.pem:/certs/tls.crt:ro",
+        "/etc/ssl/gitea/privkey.pem:/certs/tls.key:ro",
+    ]
 
 
 def test_git_over_ssh_is_disabled(host):

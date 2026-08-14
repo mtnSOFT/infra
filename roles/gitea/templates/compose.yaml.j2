@@ -23,6 +23,14 @@ services:
       GITEA__database__DB_TYPE: "sqlite3"
       GITEA__server__ROOT_URL: "{{ gitea_root_url }}"
       GITEA__server__DOMAIN: "{{ gitea_root_url | ansible.builtin.urlsplit('hostname') }}"
+{% if (gitea_tls_cert_file | length) > 0 %}
+      # Built-in HTTPS, terminated by Gitea itself on the published port. The
+      # certificate and key are read once at start from the read-only mounts
+      # below, so a renewal takes a container restart - not a converge.
+      GITEA__server__PROTOCOL: "https"
+      GITEA__server__CERT_FILE: "/certs/tls.crt"
+      GITEA__server__KEY_FILE: "/certs/tls.key"
+{% endif %}
       # Git over SSH is off - the host's sshd owns :22, and clone/push works
       # over HTTP(S) with a token.
       GITEA__server__DISABLE_SSH: "true"
@@ -33,6 +41,13 @@ services:
     volumes:
       # Config, repositories and the SQLite database
       - "{{ gitea_dir }}/data:/data"
+{% if (gitea_tls_cert_file | length) > 0 %}
+      # The certificate stays where its owner on the host put it and is mounted
+      # read-only. Outside /data on purpose: the image chowns its data volume on
+      # every start, which fails on a read-only mount.
+      - "{{ gitea_tls_cert_file }}:/certs/tls.crt:ro"
+      - "{{ gitea_tls_key_file }}:/certs/tls.key:ro"
+{% endif %}
     ports:
       - "{{ gitea_bind_ip }}:{{ gitea_http_port }}:3000"
     restart: unless-stopped

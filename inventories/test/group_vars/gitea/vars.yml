@@ -10,3 +10,9 @@ gitea_deploy: false
 gitea_bind_ip: "10.10.0.1"
 gitea_http_port: 3080
 gitea_root_url: "https://git.example.com/"
+
+# Built-in HTTPS, so the optional TLS branch of the template and the checks on
+# the certificate are exercised. The files themselves are placeholders created by
+# the scenario's converge, since the role only mounts them.
+gitea_tls_cert_file: "/etc/ssl/gitea/fullchain.pem"
+gitea_tls_key_file: "/etc/ssl/gitea/privkey.pem"

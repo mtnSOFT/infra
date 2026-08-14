@@ -25,6 +25,18 @@ gitea_http_port: 3000
 # its host part becomes Gitea's DOMAIN, so there is nothing else to keep in sync.
 gitea_root_url: "http://localhost:{{ gitea_http_port }}/"
 
+# Built-in HTTPS: host paths of the certificate (full chain) and its private key.
+# Empty (default) = plain HTTP, for an instance on loopback or behind a proxy.
+# Set both, and make gitea_root_url an https:// URL.
+#
+# The files are bind-mounted read-only and never copied or generated here, so
+# whatever puts them on the host stays in charge of renewing them - a manual copy
+# today, an ACME/DNS-API service later. Both must be readable by
+# gitea_uid/gitea_gid, since that is who reads them inside the container; the
+# role checks that before rendering.
+gitea_tls_cert_file: ""
+gitea_tls_key_file: ""
+
 # UID/GID the image runs its git user as. The data directory is chowned to
 # these and the same values are pinned as USER_UID/USER_GID in compose, so the
 # two ends cannot drift apart. Leave them alone unless the host already uses
