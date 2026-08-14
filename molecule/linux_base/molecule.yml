@@ -3,6 +3,7 @@ driver:
   name: podman
 platforms:
   - name: testhost-ubuntu-24.04
+    # renovate: datasource=docker depName=ghcr.io/mtnsoft/infra-test-ubuntu
     image: ghcr.io/mtnsoft/infra-test-ubuntu:24.04
     pre_build_image: true
 verifier:

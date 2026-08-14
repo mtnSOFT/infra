@@ -1,0 +1,197 @@
+---
+# Read-only report of the software versions actually installed on the hosts.
+#
+# Why this exists: most versions this repo deploys were not pinned in the repo -
+# container images resolved `latest` at pull time, ArgoCD resolved "stable", and
+# k3s took whatever https://get.k3s.io served on the day a node was built. Before
+# those can be pinned we need to know what is running, and afterwards this
+# playbook is the drift check that proves the pins still match reality.
+#
+# IMPORTANT: run it with ANSIBLE_NO_LOG=false. ansible.cfg sets
+# `no_log = ${ANSIBLE_NO_LOG:true}`, so by default every debug task below prints
+# "censored" and the report is useless:
+#
+#   ANSIBLE_NO_LOG=false ansible-playbook -i inventories/production \
+#     playbooks/report_versions.yml
+#
+# Nothing here changes state: every command is `changed_when: false` and
+# `failed_when: false`, so a host missing a binary reports "not available"
+# instead of aborting the run. Safe under --check.
+#
+# Host groups mirror the deploy playbooks so a version always maps to the host
+# the corresponding role runs on. Note Pi-hole is deployed to linux_routers (see
+# playbooks/pihole.yml), not to the pihole group.
+
+- name: Report OS and container runtime versions
+  hosts: all
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Get docker version
+      ansible.builtin.command: docker --version
+      register: report_docker
+      changed_when: false
+      failed_when: false
+
+    - name: Get docker compose plugin version
+      ansible.builtin.command: docker compose version
+      register: report_compose
+      changed_when: false
+      failed_when: false
+
+    - name: Report OS and runtime
+      ansible.builtin.debug:
+        msg:
+          - "os: {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }} ({{ ansible_facts['distribution_release'] }})"
+          - "kernel: {{ ansible_facts['kernel'] }}"
+          - "python: {{ ansible_facts['python_version'] }}"
+          - "docker: {{ report_docker.stdout | default('not available', true) }}"
+          - "compose: {{ report_compose.stdout | default('not available', true) }}"
+
+- name: Report Pi-hole versions
+  hosts: linux_routers
+  become: true
+  gather_facts: false
+  tasks:
+    # `docker inspect` without --format, parsed with from_json: a --format
+    # '{{ ... }}' string would be consumed by Jinja before docker ever saw it.
+    - name: Inspect the pihole container
+      ansible.builtin.command: docker inspect pihole
+      register: report_pihole_inspect
+      changed_when: false
+      failed_when: false
+
+    - name: Get Pi-hole component versions
+      ansible.builtin.command: docker exec pihole pihole -v
+      register: report_pihole_v
+      changed_when: false
+      failed_when: false
+
+    - name: Report Pi-hole
+      ansible.builtin.debug:
+        msg:
+          - "requested image: {{ (report_pihole_inspect.stdout | from_json | first).Config.Image }}"
+          - "resolved digest: {{ (report_pihole_inspect.stdout | from_json | first).Image }}"
+          - "components: {{ report_pihole_v.stdout_lines | default(['not available'], true) }}"
+      when: report_pihole_inspect.rc | default(1) == 0
+
+    - name: Report that Pi-hole is not running here
+      ansible.builtin.debug:
+        msg: "pihole container not found - nothing deployed on this host"
+      when: report_pihole_inspect.rc | default(1) != 0
+
+- name: Report monitoring stack versions
+  hosts: monitoring
+  become: true
+  gather_facts: false
+  tasks:
+    # The compose services deliberately carry no container_name (see the comment
+    # in roles/monitoring/templates/compose.yaml.j2), so go through compose
+    # rather than docker inspect.
+    - name: List monitoring stack images
+      ansible.builtin.command: "docker compose -f {{ monitoring_dir }}/compose.yaml images"
+      register: report_monitoring_images
+      changed_when: false
+      failed_when: false
+
+    - name: Report monitoring stack
+      ansible.builtin.debug:
+        msg: "{{ report_monitoring_images.stdout_lines | default(['stack not deployed'], true) }}"
+
+- name: Report k3s and in-cluster versions
+  hosts: k3s
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Get k3s version
+      ansible.builtin.command: k3s --version
+      register: report_k3s
+      changed_when: false
+      failed_when: false
+
+    # These two are the point of the report: they reveal what cert_manager_version
+    # and the old floating argocd_version "stable" actually resolved to in the
+    # cluster. kubectl jsonpath uses single braces, so Jinja leaves it alone.
+    - name: Get the applied cert-manager image
+      ansible.builtin.command: >-
+        kubectl -n cert-manager get deploy cert-manager
+        -o jsonpath={.spec.template.spec.containers[0].image}
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+      register: report_cert_manager
+      changed_when: false
+      failed_when: false
+      when: inventory_hostname == k3s_master
+
+    - name: Get the applied ArgoCD image
+      ansible.builtin.command: >-
+        kubectl -n argocd get deploy argocd-server
+        -o jsonpath={.spec.template.spec.containers[0].image}
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+      register: report_argocd
+      changed_when: false
+      failed_when: false
+      when: inventory_hostname == k3s_master
+
+    - name: Report k3s
+      ansible.builtin.debug:
+        msg:
+          - "k3s: {{ report_k3s.stdout | default('not available', true) }}"
+          # Empty or undefined on agent nodes, where the two lookups are skipped.
+          - "cert-manager: {{ report_cert_manager.stdout | default('not available', true) }}"
+          - "argo-cd: {{ report_argocd.stdout | default('not available', true) }}"
+
+- name: Report PowerDNS versions
+  hosts: powerdns
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Get pdns_server version
+      ansible.builtin.command: pdns_server --version
+      register: report_pdns
+      changed_when: false
+      failed_when: false
+
+    - name: Get pdns_recursor version
+      ansible.builtin.command: pdns_recursor --version
+      register: report_pdns_rec
+      changed_when: false
+      failed_when: false
+
+    - name: Report PowerDNS
+      ansible.builtin.debug:
+        msg:
+          # Both binaries print their version banner on stderr, not stdout.
+          - "pdns_server: {{ report_pdns.stderr | default('') or report_pdns.stdout | default('') or 'not available' }}"
+          - "pdns_recursor: {{ report_pdns_rec.stderr | default('') or report_pdns_rec.stdout | default('') or 'not available' }}"
+
+- name: Report PostgreSQL version
+  hosts: postgresql_servers
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Get psql version
+      ansible.builtin.command: psql --version
+      register: report_psql
+      changed_when: false
+      failed_when: false
+
+    - name: Report PostgreSQL
+      ansible.builtin.debug:
+        msg: "psql: {{ report_psql.stdout | default('not available', true) }}"
+
+- name: Report WireGuard version
+  hosts: wireguard
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Get wg version
+      ansible.builtin.command: wg --version
+      register: report_wg
+      changed_when: false
+      failed_when: false
+
+    - name: Report WireGuard
+      ansible.builtin.debug:
+        msg: "wireguard: {{ report_wg.stdout | default('not available', true) }}"
