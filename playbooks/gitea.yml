@@ -1,0 +1,7 @@
+---
+- name: Apply gitea role
+  hosts: gitea
+  become: true
+  roles:
+    - docker-compose
+    - gitea

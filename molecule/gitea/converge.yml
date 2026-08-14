@@ -1,0 +1,9 @@
+---
+# Test values live in inventories/test/group_vars/gitea/. The role has no
+# secrets - SQLite needs no password - so there is no vault file for this group.
+- name: Converge
+  hosts: gitea
+  become: true
+
+  roles:
+    - role: gitea

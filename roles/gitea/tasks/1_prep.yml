@@ -1,0 +1,34 @@
+---
+# The project directory stays 0750 root:root - bind mounts are performed by the
+# docker daemon as root, so the container only needs permissions on the mount
+# target. That target holds everything: config, repositories and the SQLite
+# database, so it is chowned to the UID/GID the image's git user runs as (also
+# pinned as USER_UID/USER_GID in compose) and stays unreadable to other host
+# users.
+- name: Create gitea directory tree
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner | default('root') }}"
+    group: "{{ item.group | default('root') }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - path: "{{ gitea_dir }}"
+      mode: "0750"
+    - path: "{{ gitea_dir }}/data"
+      mode: "0750"
+      owner: "{{ gitea_uid }}"
+      group: "{{ gitea_gid }}"
+  loop_control:
+    label: "{{ item.path }}"
+
+# No .env file: SQLite needs no database password and Gitea generates its own
+# SECRET_KEY / INTERNAL_TOKEN into data/gitea/conf/app.ini on first start, so
+# this role has no secret to render.
+- name: Render gitea compose file
+  ansible.builtin.template:
+    src: compose.yaml.j2
+    dest: "{{ gitea_dir }}/compose.yaml"
+    owner: root
+    group: root
+    mode: "0644"

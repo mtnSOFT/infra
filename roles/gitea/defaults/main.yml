@@ -1,0 +1,30 @@
+---
+# Container image and tag for the Gitea stack
+gitea_image: "gitea/gitea"
+gitea_version_tag: "latest"
+
+# Where the compose project and its persistent /data volume live
+gitea_dir: "/containers/gitea"
+
+# Bring the stack up with `docker compose`. Set false to render the configuration
+# only - that is what the molecule scenario does, since the test container has no
+# docker daemon.
+gitea_deploy: true
+
+# Host IP and port the web interface is published on. Docker's published ports
+# are DNAT'd and bypass UFW's INPUT chain, so this binding - not the firewall -
+# is what limits who can reach Gitea. Keep it on loopback when a reverse proxy
+# fronts it, or bind an internal address (e.g. wg0's) to make it VPN-only.
+gitea_bind_ip: "127.0.0.1"
+gitea_http_port: 3000
+
+# External URL of the instance: Gitea builds clone URLs and links from it, and
+# its host part becomes Gitea's DOMAIN, so there is nothing else to keep in sync.
+gitea_root_url: "http://localhost:{{ gitea_http_port }}/"
+
+# UID/GID the image runs its git user as. The data directory is chowned to
+# these and the same values are pinned as USER_UID/USER_GID in compose, so the
+# two ends cannot drift apart. Leave them alone unless the host already uses
+# 1000 for a real user.
+gitea_uid: 1000
+gitea_gid: 1000
