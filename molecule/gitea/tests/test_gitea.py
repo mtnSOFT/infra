@@ -1,3 +1,5 @@
+import re
+
 import yaml
 
 BASE = "/containers/gitea"
@@ -51,7 +53,10 @@ def test_compose_file(host):
     assert set(services) == {"gitea"}
 
     gitea = services["gitea"]
-    assert gitea["image"] == "gitea/gitea:latest"
+    # An exact release, never a floating tag: an unplanned Gitea upgrade migrates
+    # the database on first start and cannot be rolled back. Matched by shape, so
+    # bumping gitea_version_tag does not mean editing this test.
+    assert re.fullmatch(r"gitea/gitea:\d+\.\d+\.\d+", gitea["image"])
     assert gitea["restart"] == "unless-stopped"
     # Everything persistent is in the one data volume
     assert gitea["volumes"] == [f"{BASE}/data:/data"]

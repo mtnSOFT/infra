@@ -1,7 +1,10 @@
 ---
-# Container image and tag for the Gitea stack
+# Container image and tag for the Gitea stack. Pinned to an exact release, not
+# `latest` or `1.27`: a Gitea upgrade migrates the database on first start and is
+# not reversible, so the version a converge installs has to be the one that was
+# reviewed. Bump this deliberately, after reading the release notes.
 gitea_image: "gitea/gitea"
-gitea_version_tag: "latest"
+gitea_version_tag: "1.27.2"
 
 # Where the compose project and its persistent /data volume live
 gitea_dir: "/containers/gitea"

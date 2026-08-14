@@ -43,6 +43,9 @@ stack. Needs the [docker-compose](../docker-compose/README.md) role first.
   `docker compose exec gitea …` rather than a fixed container name.
 - Anonymous visitors can browse public repositories; keep repositories private,
   or set `REQUIRE_SIGNIN_VIEW` in `app.ini`.
+- **Upgrades migrate the database.** Bumping `gitea_version_tag` makes the next
+  converge pull that release and migrate `data` on first start, which cannot be
+  rolled back — read the release notes and back up first.
 - Back up with `gitea dump`, or stop the stack before copying
   `{{ gitea_dir }}/data` — copying a live SQLite database can yield a corrupt file.
 - SQLite fits a small instance. Moving to PostgreSQL later is a `gitea dump` /
@@ -57,8 +60,8 @@ stack. Needs the [docker-compose](../docker-compose/README.md) role first.
 - `gitea_http_port` — published host port (default `3000`)
 - `gitea_root_url` — external URL of the instance, and the source of Gitea's
   `DOMAIN` (default `http://localhost:{{ gitea_http_port }}/`)
-- `gitea_image` / `gitea_version_tag` — image and tag (default
-  `gitea/gitea:latest`; pin these in inventory)
+- `gitea_image` / `gitea_version_tag` — image and tag, pinned to an exact release
+  (default `gitea/gitea:1.27.2`)
 - `gitea_uid` / `gitea_gid` — UID/GID the image runs its git user as; the data
   directory is chowned to these and they are pinned as `USER_UID` / `USER_GID` in
   compose (defaults `1000`/`1000`)
@@ -75,5 +78,4 @@ Targets the `gitea` group. The defaults run as-is; configure it in
 # vars.yml
 gitea_root_url: "https://git.example.com/"
 gitea_bind_ip: "10.10.0.1" # e.g. wg0's address; 127.0.0.1 behind a proxy
-gitea_version_tag: "1.24"
 ```
