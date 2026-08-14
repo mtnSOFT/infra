@@ -1,0 +1,18 @@
+---
+# The test container has no docker daemon, so the stack is not brought up - the
+# scenario verifies the rendered configuration, which is where the role's logic
+# lives.
+gitea_deploy: false
+
+# Non-default values so the published port and the URL-derived DOMAIN are
+# actually asserted (DOMAIN is split out of gitea_root_url, not configured
+# separately).
+gitea_bind_ip: "10.10.0.1"
+gitea_http_port: 3080
+gitea_root_url: "https://git.example.com/"
+
+# Built-in HTTPS, so the optional TLS branch of the template and the checks on
+# the certificate are exercised. The files themselves are placeholders created by
+# the scenario's converge, since the role only mounts them.
+gitea_tls_cert_file: "/etc/ssl/gitea/fullchain.pem"
+gitea_tls_key_file: "/etc/ssl/gitea/privkey.pem"

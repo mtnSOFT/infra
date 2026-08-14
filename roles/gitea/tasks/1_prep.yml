@@ -1,0 +1,92 @@
+---
+# HTTPS is optional and the certificate is not managed here - it is only mounted
+# into the container - so the pair is validated instead: half a configuration
+# renders a Gitea that refuses to start, and an http:// ROOT_URL on an https
+# instance hands out clone URLs nobody can use.
+- name: Validate the gitea TLS settings
+  ansible.builtin.assert:
+    that:
+      - (gitea_tls_cert_file | length > 0) == (gitea_tls_key_file | length > 0)
+      - gitea_root_url is match('https://')
+    fail_msg: >-
+      gitea_tls_cert_file and gitea_tls_key_file must be set together, and
+      gitea_root_url must then be an https:// URL. Got
+      cert={{ gitea_tls_cert_file }}, key={{ gitea_tls_key_file }},
+      root_url={{ gitea_root_url }}.
+  # ansible.cfg turns no_log on for every task, which would censor the message
+  # that makes this failure actionable. Nothing secret is in it.
+  no_log: false
+  when: (gitea_tls_cert_file | length > 0) or (gitea_tls_key_file | length > 0)
+
+# get_checksum: false - the metadata is all that matters here, and there is no
+# reason to read a private key just to hash it.
+- name: Stat the gitea TLS certificate and key
+  ansible.builtin.stat:
+    path: "{{ item }}"
+    get_checksum: false
+  loop:
+    - "{{ gitea_tls_cert_file }}"
+    - "{{ gitea_tls_key_file }}"
+  register: gitea_tls_stat
+  when: gitea_tls_cert_file | length > 0
+
+# Both files are bind-mounted, so Gitea opens them as the container's git user -
+# a key that only root can read means a container that crash-loops on start.
+# Failing here says why; the container's exit code would not.
+- name: Assert the gitea TLS certificate and key are readable in the container
+  ansible.builtin.assert:
+    that:
+      # Existence first: assert stops at the first failure, so the permission
+      # check below can never trip over a missing file's empty stat.
+      - item.stat.exists
+      - item.stat.isreg
+      - >-
+        item.stat.roth
+        or (item.stat.rgrp and item.stat.gid == gitea_gid)
+        or (item.stat.rusr and item.stat.uid == gitea_uid)
+    fail_msg: >-
+      {{ item.item }} must be a file readable by uid {{ gitea_uid }} /
+      gid {{ gitea_gid }}, the git user inside the container - the file is
+      mounted, never copied, so those are the IDs that read it. For a private
+      key: `chown root:{{ gitea_gid }} {{ item.item }} && chmod 0640
+      {{ item.item }}`.
+  # See above: without this the failure would be reported as censored output.
+  no_log: false
+  loop: "{{ gitea_tls_stat.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: gitea_tls_cert_file | length > 0
+
+# The project directory stays 0750 root:root - bind mounts are performed by the
+# docker daemon as root, so the container only needs permissions on the mount
+# target. That target holds everything: config, repositories and the SQLite
+# database, so it is chowned to the UID/GID the image's git user runs as (also
+# pinned as USER_UID/USER_GID in compose) and stays unreadable to other host
+# users.
+- name: Create gitea directory tree
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner | default('root') }}"
+    group: "{{ item.group | default('root') }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - path: "{{ gitea_dir }}"
+      mode: "0750"
+    - path: "{{ gitea_dir }}/data"
+      mode: "0750"
+      owner: "{{ gitea_uid }}"
+      group: "{{ gitea_gid }}"
+  loop_control:
+    label: "{{ item.path }}"
+
+# No .env file: SQLite needs no database password and Gitea generates its own
+# SECRET_KEY / INTERNAL_TOKEN into data/gitea/conf/app.ini on first start, so
+# this role has no secret to render.
+- name: Render gitea compose file
+  ansible.builtin.template:
+    src: compose.yaml.j2
+    dest: "{{ gitea_dir }}/compose.yaml"
+    owner: root
+    group: root
+    mode: "0644"

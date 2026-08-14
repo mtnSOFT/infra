@@ -1,0 +1,53 @@
+# Ansible managed
+#
+# One service, SQLite inside the data volume - no database container and no
+# secrets. The published port is bound to an explicit host IP, never the
+# wildcard: docker publishes via DNAT and bypasses UFW's INPUT chain, so the
+# bind address is the access control.
+#
+# No container_name: that would claim a global docker name and collide with any
+# container of the same name outside this project. Compose names it
+# gitea-gitea-1 instead.
+services:
+  gitea:
+    image: {{ gitea_image }}:{{ gitea_version_tag }}
+    environment:
+      TZ: "{{ timezone | default('UTC') }}"
+      # The image drops to this git user and chowns its data; the service cannot
+      # run as `user:` because its init needs root first.
+      USER_UID: "{{ gitea_uid }}"
+      USER_GID: "{{ gitea_gid }}"
+      # Every GITEA__<section>__<KEY> below is written into
+      # data/gitea/conf/app.ini on each container start, so this file - not the
+      # running instance - is the source of truth for these keys.
+      GITEA__database__DB_TYPE: "sqlite3"
+      GITEA__server__ROOT_URL: "{{ gitea_root_url }}"
+      GITEA__server__DOMAIN: "{{ gitea_root_url | ansible.builtin.urlsplit('hostname') }}"
+{% if (gitea_tls_cert_file | length) > 0 %}
+      # Built-in HTTPS, terminated by Gitea itself on the published port. The
+      # certificate and key are read once at start from the read-only mounts
+      # below, so a renewal takes a container restart - not a converge.
+      GITEA__server__PROTOCOL: "https"
+      GITEA__server__CERT_FILE: "/certs/tls.crt"
+      GITEA__server__KEY_FILE: "/certs/tls.key"
+{% endif %}
+      # Git over SSH is off - the host's sshd owns :22, and clone/push works
+      # over HTTP(S) with a token.
+      GITEA__server__DISABLE_SSH: "true"
+      # Ansible renders the configuration, so skip the web installer, and keep
+      # the instance closed: accounts are created by an admin.
+      GITEA__security__INSTALL_LOCK: "true"
+      GITEA__service__DISABLE_REGISTRATION: "true"
+    volumes:
+      # Config, repositories and the SQLite database
+      - "{{ gitea_dir }}/data:/data"
+{% if (gitea_tls_cert_file | length) > 0 %}
+      # The certificate stays where its owner on the host put it and is mounted
+      # read-only. Outside /data on purpose: the image chowns its data volume on
+      # every start, which fails on a read-only mount.
+      - "{{ gitea_tls_cert_file }}:/certs/tls.crt:ro"
+      - "{{ gitea_tls_key_file }}:/certs/tls.key:ro"
+{% endif %}
+    ports:
+      - "{{ gitea_bind_ip }}:{{ gitea_http_port }}:3000"
+    restart: unless-stopped
