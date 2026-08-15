@@ -63,6 +63,10 @@ password manager) as a Docker Compose stack. Needs the
   (`docker run --rm -it vaultwarden/server /vaultwarden hash`), double every `$`
   in the value — `docker compose` interpolates `.env` and would otherwise eat
   parts of the Argon2 string.
+- **Upgrades migrate the database.** Bumping `vaultwarden_version_tag` makes the
+  next converge pull that release and migrate `data/db.sqlite3` on first start,
+  which cannot be rolled back — read the release notes and take a backup first
+  (`/usr/local/bin/vaultwarden-backup.sh`).
 - **The backups stay on the same host.** Ten daily tarballs next to the data
   they came from survive a bad upgrade, not a dead disk — copy
   `{{ vaultwarden_backup_dir }}` off the machine with whatever does the rest of
@@ -96,8 +100,8 @@ password manager) as a Docker Compose stack. Needs the
 - `vaultwarden_signups_allowed` — open registration (default `false`)
 - `vaultwarden_invitations_allowed` — let existing users invite others (default
   `true`)
-- `vaultwarden_image` / `vaultwarden_version_tag` — image and tag (default
-  `vaultwarden/server:latest`; pin these in inventory)
+- `vaultwarden_image` / `vaultwarden_version_tag` — image and tag, pinned to an
+  exact release (default `vaultwarden/server:1.37.1`)
 - `vaultwarden_backup_enabled` — install the script and the cron job (default
   `true`; `false` removes the job again and leaves the archives alone)
 - `vaultwarden_backup_dir` — where the archives land (default

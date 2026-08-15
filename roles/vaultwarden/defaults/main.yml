@@ -1,7 +1,10 @@
 ---
-# Container image and tag for the Vaultwarden stack
+# Container image and tag for the Vaultwarden stack. Pinned to an exact release,
+# not `latest` or `1.37`: an upgrade migrates the SQLite database on first start
+# and is not reversible, so the version a converge installs has to be the one
+# that was reviewed. Bump this deliberately, after reading the release notes.
 vaultwarden_image: "vaultwarden/server"
-vaultwarden_version_tag: "latest"
+vaultwarden_version_tag: "1.37.1"
 
 # Where the compose project, the SQLite database and the TLS material live
 vaultwarden_dir: "/containers/vaultwarden"

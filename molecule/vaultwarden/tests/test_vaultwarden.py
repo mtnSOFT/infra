@@ -1,3 +1,5 @@
+import re
+
 import yaml
 
 BASE = "/containers/vaultwarden"
@@ -79,7 +81,10 @@ def test_compose_file(host):
 
     vaultwarden = services["vaultwarden"]
     assert vaultwarden["container_name"] == "vaultwarden"
-    assert vaultwarden["image"] == "vaultwarden/server:latest"
+    # An exact release, never a floating tag: an unplanned Vaultwarden upgrade
+    # migrates the database on first start and cannot be rolled back. Matched by
+    # shape, so bumping vaultwarden_version_tag does not mean editing this test.
+    assert re.fullmatch(r"vaultwarden/server:\d+\.\d+\.\d+", vaultwarden["image"])
     assert vaultwarden["restart"] == "unless-stopped"
     assert vaultwarden["volumes"] == [
         f"{BASE}/data:/data",
