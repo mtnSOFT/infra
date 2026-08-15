@@ -4,11 +4,11 @@
 # lives.
 vaultwarden_deploy: false
 
-# From vault.yml next to this file, so the scenario exercises the same vault_*
-# indirection production uses. The certificate there is a throwaway self-signed
-# pair for vault.example.com, generated for these tests only.
-vaultwarden_tls_cert: "{{ vault_vaultwarden_tls_cert }}"
-vaultwarden_tls_key: "{{ vault_vaultwarden_tls_key }}"
+# The role only mounts the pair, so the scenario's converge puts a placeholder at
+# these paths - there is no PEM material in this inventory, and this group has no
+# vault file any more.
+vaultwarden_tls_cert_file: "/etc/ssl/vaultwarden/fullchain.pem"
+vaultwarden_tls_key_file: "/etc/ssl/vaultwarden/privkey.pem"
 
 # Non-default values so the optional template branches are actually asserted: a
 # custom HTTPS port bound to a single IP, with that port carried in the domain.

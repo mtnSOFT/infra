@@ -27,10 +27,17 @@ vaultwarden_https_port: 443
 # No default - set it in inventory.
 vaultwarden_domain: ""
 
-# TLS certificate chain and its private key, in PEM. Both are required: the
-# clients refuse plain HTTP on anything but localhost. Put the key in vault.
-vaultwarden_tls_cert: ""
-vaultwarden_tls_key: ""
+# Host paths of the TLS certificate (full chain) and its private key, in PEM.
+# Both are required - no default: the clients refuse plain HTTP on anything but
+# localhost, so there is no working configuration without them.
+#
+# The files are bind-mounted read-only and never copied or generated here, so
+# whatever puts them on the host stays in charge of renewing them - a manual copy
+# today, an ACME/DNS-API service later. The container runs as root and reads them
+# through the mount, so a 0600 root-owned key is fine; the role checks both are
+# there before rendering.
+vaultwarden_tls_cert_file: ""
+vaultwarden_tls_key_file: ""
 
 # Daily backup: an online SQLite copy plus the rest of the data directory, as one
 # timestamped tarball. Set false to remove the cron job again (the script and the

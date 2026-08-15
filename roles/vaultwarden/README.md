@@ -11,12 +11,13 @@ password manager) as a Docker Compose stack. Needs the
 - Runs **one container on SQLite** — no `DATABASE_URL` is set, so Vaultwarden
   keeps its database, attachments and token signing keys in
   `{{ vaultwarden_dir }}/data`
-- **Terminates TLS itself** (`ROCKET_TLS`) from the certificate and key you
-  supply, so there is no reverse proxy in the stack. The published port is
+- **Terminates TLS itself** (`ROCKET_TLS`) from a certificate and key already on
+  the host, so there is no reverse proxy in the stack. The published port is
   therefore an HTTPS port: `vaultwarden_https_port` (default `443`) on
   `vaultwarden_bind_ip`
-- Installs the PEM pair into `{{ vaultwarden_dir }}/ssl` (`cert.pem` `0644`,
-  `key.pem` `0600`) and restarts the container when either changes
+- **Mounts the PEM pair read-only**, one file at a time, from
+  `vaultwarden_tls_cert_file` / `vaultwarden_tls_key_file` — it never copies or
+  generates certificate material, and checks both paths exist before rendering
 - **Locks account creation down entirely**: `SIGNUPS_ALLOWED` and
   `INVITATIONS_ALLOWED` are rendered `false` and no `ADMIN_TOKEN` is set, so
   nobody can register or be invited, the `/admin` panel stays disabled and no
@@ -32,11 +33,18 @@ password manager) as a Docker Compose stack. Needs the
 
 ## Gotchas
 
-- **The certificate is yours to renew.** The role has no ACME client: it writes
-  whatever `vaultwarden_tls_cert` / `vaultwarden_tls_key` hold and restarts the
-  container. Renewal means updating those variables and converging again —
-  Rocket reads both files once at startup, so nothing picks up a new certificate
-  on its own.
+- **The certificate is yours to renew, restart included.** The role has no ACME
+  client and does not manage the files at all — it mounts the two paths and
+  checks they are there. Whatever puts them on the host (a manual copy today, a
+  DNS-API service later) owns renewing them, and since Rocket reads both files
+  once at startup, a new certificate only takes effect on
+  `docker compose restart vaultwarden` — a converge alone changes nothing.
+- **A converge deletes `{{ vaultwarden_dir }}/ssl`.** Earlier versions of this
+  role copied the PEM pair there from vault; the container reads the mounted
+  paths now, so that copy of the private key is removed instead of being left on
+  disk. Put the certificate somewhere outside the project directory first — or,
+  if you do want to keep it there, point the two variables at
+  `{{ vaultwarden_dir }}/ssl/…`, which skips the cleanup.
 - **The clients insist on HTTPS.** A browser or a Bitwarden app will not talk to
   a plain-HTTP vault (except on localhost), and a self-signed certificate is
   rejected by the mobile and desktop clients until its CA is trusted on the
@@ -101,8 +109,9 @@ password manager) as a Docker Compose stack. Needs the
 
 - `vaultwarden_domain` — external URL clients use, including the port when it is
   not 443 (no default)
-- `vaultwarden_tls_cert` / `vaultwarden_tls_key` — PEM certificate chain and
-  private key (key from vault; no defaults)
+- `vaultwarden_tls_cert_file` / `vaultwarden_tls_key_file` — host paths of the
+  certificate (full chain) and its private key, mounted read-only into the
+  container. Both required, no defaults
 - `vaultwarden_https_port` — published HTTPS port (default `443`)
 - `vaultwarden_bind_ip` — host IP the port is published on (default `0.0.0.0`)
 - `vaultwarden_dir` — compose project directory (default `/containers/vaultwarden`)
@@ -137,16 +146,12 @@ vaultwarden_domain: "https://vault.example.com:8443"
 vaultwarden_https_port: 8443
 vaultwarden_bind_ip: "10.10.0.1" # wg0 -> reachable over the VPN only
 
-vaultwarden_tls_cert: "{{ vault_vaultwarden_tls_cert }}"
-vaultwarden_tls_key: "{{ vault_vaultwarden_tls_key }}"
-
-# vault.yml (ansible-vault)
-vault_vaultwarden_tls_cert: |
-  -----BEGIN CERTIFICATE-----
-  ...
-vault_vaultwarden_tls_key: |
-  -----BEGIN PRIVATE KEY-----
-  ...
+# Certificate on the host - copied in by hand, or dropped there by the service
+# that fetches it via the DNS API. This role only mounts it read-only, so no PEM
+# material goes into the inventory or a vault file. The container runs as root,
+# so `chown root:root` and `chmod 0600` on the key is what it wants.
+vaultwarden_tls_cert_file: "/etc/ssl/vaultwarden/fullchain.pem"
+vaultwarden_tls_key_file: "/etc/ssl/vaultwarden/privkey.pem"
 ```
 
 Accounts are not configured here at all — see the gotcha above for the manual

@@ -1,9 +1,37 @@
 ---
-# Test values live in inventories/test/group_vars/vaultwarden/ - including the
-# TLS pair, which comes from that group's vault.
+# Test values live in inventories/test/group_vars/vaultwarden/. The role has no
+# secrets - the certificate is mounted from the host and the stack renders no
+# .env - so there is no vault file for this group.
 - name: Converge
   hosts: vaultwarden
   become: true
+
+  pre_tasks:
+    # Stand-ins for the certificate a manual copy or an ACME service puts on the
+    # host: the role only mounts them, so the content is irrelevant here - the
+    # paths are what it checks. Owner and mode match what the README asks for.
+    - name: Create the TLS directory for testing
+      ansible.builtin.file:
+        path: /etc/ssl/vaultwarden
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Create a placeholder certificate and key for testing
+      ansible.builtin.copy:
+        content: "molecule placeholder - vaultwarden is not started here\n"
+        dest: "/etc/ssl/vaultwarden/{{ item.name }}"
+        owner: root
+        group: root
+        mode: "{{ item.mode }}"
+      loop:
+        - name: fullchain.pem
+          mode: "0644"
+        - name: privkey.pem
+          mode: "0600"
+      loop_control:
+        label: "{{ item.name }}"
 
   roles:
     - role: vaultwarden

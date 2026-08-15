@@ -18,8 +18,8 @@ def _service(host):
 
 def test_directory_tree(host):
     # The data directory holds the SQLite database and the token signing keys,
-    # the ssl one the private key - both stay root-only.
-    tree = ((BASE, 0o750), (f"{BASE}/data", 0o700), (f"{BASE}/ssl", 0o700))
+    # so it stays root-only.
+    tree = ((BASE, 0o750), (f"{BASE}/data", 0o700))
     for path, mode in tree:
         directory = host.file(path)
         assert directory.is_directory
@@ -28,17 +28,11 @@ def test_directory_tree(host):
         assert directory.mode == mode
 
 
-def test_tls_material_is_installed(host):
-    cert = host.file(f"{BASE}/ssl/cert.pem")
-    assert cert.mode == 0o644
-    assert cert.content_string.startswith("-----BEGIN CERTIFICATE-----")
-    assert cert.content_string.rstrip().endswith("-----END CERTIFICATE-----")
-
-    # Same PEM pair as the certificate, from the test group's vault
-    key = host.file(f"{BASE}/ssl/key.pem")
-    assert key.user == "root"
-    assert key.mode == 0o600
-    assert key.content_string.startswith("-----BEGIN PRIVATE KEY-----")
+def test_no_tls_material_is_copied_into_the_project(host):
+    # The pair is mounted from wherever its owner put it on the host, so nothing
+    # here holds a copy - including the ssl/ directory earlier versions of this
+    # role wrote the private key into, which a converge cleans up.
+    assert not host.file(f"{BASE}/ssl").exists
 
 
 def test_no_env_file_is_left_behind(host):
@@ -63,10 +57,9 @@ def test_compose_file(host):
     # shape, so bumping vaultwarden_version_tag does not mean editing this test.
     assert re.fullmatch(r"vaultwarden/server:\d+\.\d+\.\d+", vaultwarden["image"])
     assert vaultwarden["restart"] == "unless-stopped"
-    assert vaultwarden["volumes"] == [
-        f"{BASE}/data:/data",
-        f"{BASE}/ssl:/ssl:ro",
-    ]
+    # Everything persistent is in the one data volume; the certificate is mounted
+    # read-only beside it (asserted in detail below)
+    assert vaultwarden["volumes"][0] == f"{BASE}/data:/data"
 
 
 def test_published_port_is_the_configured_https_port(host):
@@ -79,6 +72,16 @@ def test_tls_is_terminated_by_vaultwarden(host):
     assert _service(host)["environment"]["ROCKET_TLS"] == (
         '{certs="/ssl/cert.pem",key="/ssl/key.pem"}'
     )
+
+
+def test_certificate_is_mounted_read_only_from_the_host(host):
+    # vaultwarden_tls_cert_file / vaultwarden_tls_key_file from the test
+    # inventory, mounted per file and never copied - so renewing the certificate
+    # is its owner's job, and takes a container restart.
+    assert _service(host)["volumes"][1:] == [
+        "/etc/ssl/vaultwarden/fullchain.pem:/ssl/cert.pem:ro",
+        "/etc/ssl/vaultwarden/privkey.pem:/ssl/key.pem:ro",
+    ]
 
 
 def test_domain_carries_the_custom_port(host):

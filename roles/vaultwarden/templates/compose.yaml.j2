@@ -14,7 +14,8 @@ services:
       # when that is not 443.
       DOMAIN: "{{ vaultwarden_domain }}"
       # Serve HTTPS straight from the mounted certificate. Rocket reads both
-      # files once at startup - a renewed certificate needs a restart.
+      # files once at startup - a renewed certificate needs a container restart,
+      # which no converge triggers now that the role does not write them.
       ROCKET_TLS: '{certs="/ssl/cert.pem",key="/ssl/key.pem"}'
       # No DATABASE_URL: Vaultwarden then uses SQLite at /data/db.sqlite3.
       # Nobody can add themselves to this vault: registration and invitations
@@ -25,8 +26,13 @@ services:
       SIGNUPS_ALLOWED: "false"
       INVITATIONS_ALLOWED: "false"
     volumes:
+      # Database, attachments and the token signing keys
       - "{{ vaultwarden_dir }}/data:/data"
-      - "{{ vaultwarden_dir }}/ssl:/ssl:ro"
+      # The certificate stays where its owner on the host put it and is mounted
+      # read-only, one file at a time so nothing else in that directory comes
+      # along - and outside /data, which the backup script archives.
+      - "{{ vaultwarden_tls_cert_file }}:/ssl/cert.pem:ro"
+      - "{{ vaultwarden_tls_key_file }}:/ssl/key.pem:ro"
     ports:
       - "{{ vaultwarden_bind_ip }}:{{ vaultwarden_https_port }}:80"
     restart: unless-stopped
