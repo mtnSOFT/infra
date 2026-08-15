@@ -17,13 +17,13 @@ services:
       # files once at startup - a renewed certificate needs a restart.
       ROCKET_TLS: '{certs="/ssl/cert.pem",key="/ssl/key.pem"}'
       # No DATABASE_URL: Vaultwarden then uses SQLite at /data/db.sqlite3.
-      SIGNUPS_ALLOWED: "{{ vaultwarden_signups_allowed | bool | string | lower }}"
-      INVITATIONS_ALLOWED: "{{ vaultwarden_invitations_allowed | bool | string | lower }}"
-{% if vaultwarden_admin_token | length > 0 %}
-      # /admin panel token (interpolated from the .env file next to this
-      # compose). Omitted entirely when no token is set, which disables the panel.
-      ADMIN_TOKEN: "${VAULTWARDEN_ADMIN_TOKEN}"
-{% endif %}
+      # Nobody can add themselves to this vault: registration and invitations
+      # are both off and there is no ADMIN_TOKEN either, so the /admin panel
+      # stays disabled and no admin secret has to be kept in vault or on disk.
+      # Upstream defaults both of these to true, hence the explicit false.
+      # Creating an account is a deliberate manual step - see the README.
+      SIGNUPS_ALLOWED: "false"
+      INVITATIONS_ALLOWED: "false"
     volumes:
       - "{{ vaultwarden_dir }}/data:/data"
       - "{{ vaultwarden_dir }}/ssl:/ssl:ro"

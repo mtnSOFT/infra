@@ -12,20 +12,6 @@ def _load(host, path):
     return yaml.safe_load(host.file(path).content_string)
 
 
-def _admin_token(host):
-    """The rendered token, read back from .env rather than hardcoded here."""
-    lines = [
-        line
-        for line in host.file(f"{BASE}/.env").content_string.splitlines()
-        if line and not line.startswith("#")
-    ]
-    # The only variable in there
-    assert len(lines) == 1, lines
-    name, _, value = lines[0].partition("=")
-    assert name == "VAULTWARDEN_ADMIN_TOKEN"
-    return value
-
-
 def _service(host):
     return _load(host, f"{BASE}/compose.yaml")["services"]["vaultwarden"]
 
@@ -55,25 +41,16 @@ def test_tls_material_is_installed(host):
     assert key.content_string.startswith("-----BEGIN PRIVATE KEY-----")
 
 
-def test_env_file_holds_the_admin_token_and_is_not_world_readable(host):
-    env = host.file(f"{BASE}/.env")
-    assert env.exists
-    assert env.user == "root"
-    assert env.mode == 0o600
-
-    # The token reaches the role as vault_vaultwarden_admin_token, so a leftover
-    # "{{" or an empty value means that indirection is broken.
-    token = _admin_token(host)
-    assert token
-    assert "{{" not in token
+def test_no_env_file_is_left_behind(host):
+    # The role carries no secret into the compose project any more, and cleans
+    # up the .env earlier versions wrote the admin token into.
+    assert not host.file(f"{BASE}/.env").exists
 
 
 def test_compose_file(host):
     compose = host.file(f"{BASE}/compose.yaml")
     assert compose.mode == 0o644
-    # compose.yaml is world-readable, so neither the admin token nor the private
-    # key may be inlined here
-    assert _admin_token(host) not in compose.content_string
+    # compose.yaml is world-readable, so the private key may not be inlined here
     assert "PRIVATE KEY" not in compose.content_string
 
     services = _load(host, f"{BASE}/compose.yaml")["services"]
@@ -185,11 +162,11 @@ def test_backup_archives_the_data_and_keeps_the_last_ten(host):
     assert restored == "1"
 
 
-def test_account_handling(host):
+def test_account_creation_is_closed_off(host):
     env = _service(host)["environment"]
-    # Booleans reach the container as the strings Vaultwarden parses
+    # Both default to true upstream, so they have to be rendered explicitly -
+    # as the strings Vaultwarden parses, not YAML booleans
     assert env["SIGNUPS_ALLOWED"] == "false"
-    assert env["INVITATIONS_ALLOWED"] == "true"
-    # Present because the test inventory sets a token; without one the key is
-    # omitted entirely, which disables the /admin panel
-    assert env["ADMIN_TOKEN"] == "${VAULTWARDEN_ADMIN_TOKEN}"
+    assert env["INVITATIONS_ALLOWED"] == "false"
+    # No admin token anywhere, which leaves the /admin panel disabled
+    assert "ADMIN_TOKEN" not in env

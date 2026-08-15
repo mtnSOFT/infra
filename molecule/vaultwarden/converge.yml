@@ -1,6 +1,6 @@
 ---
 # Test values live in inventories/test/group_vars/vaultwarden/ - including the
-# TLS pair and the admin token, which come from that group's vault.
+# TLS pair, which comes from that group's vault.
 - name: Converge
   hosts: vaultwarden
   become: true

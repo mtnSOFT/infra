@@ -8,8 +8,7 @@ platforms:
 verifier:
   name: testinfra
   options:
-    # The rendered .env and the private key are 0600 root:root, the data and ssl
-    # directories 0700
+    # The private key is 0600 root:root, the data and ssl directories 0700
     sudo: true
 provisioner:
   name: ansible

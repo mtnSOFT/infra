@@ -32,17 +32,6 @@ vaultwarden_domain: ""
 vaultwarden_tls_cert: ""
 vaultwarden_tls_key: ""
 
-# Account handling. Signups are closed by default, so the vault is not open to
-# anyone who can reach the port; invitations still let an existing user (or the
-# admin panel) add people.
-vaultwarden_signups_allowed: false
-vaultwarden_invitations_allowed: true
-
-# Token for the /admin panel (user management, diagnostics). Empty (default)
-# leaves the panel disabled. Put it in vault; see the README for how to generate
-# one.
-vaultwarden_admin_token: ""
-
 # Daily backup: an online SQLite copy plus the rest of the data directory, as one
 # timestamped tarball. Set false to remove the cron job again (the script and the
 # archives already taken are left alone).

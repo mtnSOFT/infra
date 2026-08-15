@@ -17,11 +17,11 @@ password manager) as a Docker Compose stack. Needs the
   `vaultwarden_bind_ip`
 - Installs the PEM pair into `{{ vaultwarden_dir }}/ssl` (`cert.pem` `0644`,
   `key.pem` `0600`) and restarts the container when either changes
-- Closes signups by default and enables invitations, so accounts are created by
-  an existing user or from the `/admin` panel
-- Enables the `/admin` panel only when `vaultwarden_admin_token` is set; the
-  token is interpolated from a `0600` `.env` next to the compose file, never
-  inlined into `compose.yaml`
+- **Locks account creation down entirely**: `SIGNUPS_ALLOWED` and
+  `INVITATIONS_ALLOWED` are rendered `false` and no `ADMIN_TOKEN` is set, so
+  nobody can register or be invited, the `/admin` panel stays disabled and no
+  admin secret lives in vault or on the host. None of that is configurable —
+  adding an account is a deliberate manual step (see below)
 - Installs `/usr/local/bin/vaultwarden-backup.sh` and a **daily cron job**
   (03:30 by default) that writes one timestamped `0600` tarball per run into
   `{{ vaultwarden_backup_dir }}` (default `{{ vaultwarden_dir }}/backup`) and
@@ -46,23 +46,36 @@ password manager) as a Docker Compose stack. Needs the
   `https://vault.example.com:8443`). It is the origin for passkeys/WebAuthn and
   the base of invitation and password-reset links; changing it later invalidates
   registered passkeys and pending invites.
-- **The first account needs a way in.** With signups closed and no admin token
-  there is no way to register: set `vaultwarden_signups_allowed: true`,
-  converge, create your account, then set it back to `false` — or set an admin
-  token and invite from `/admin`.
+- **Every account is created by hand.** Signups and invitations are both off and
+  there is no admin panel, so a fresh vault has no way in — and the role has no
+  variable to open one, for the first user or any later one. Open registration
+  on the host for as long as it takes:
+
+  ```sh
+  cd /containers/vaultwarden
+  sed -i 's/SIGNUPS_ALLOWED: "false"/SIGNUPS_ALLOWED: "true"/' compose.yaml
+  docker compose up -d
+  # register at vaultwarden_domain in a browser, then close it again:
+  ansible-playbook -i inventories/production/hosts playbooks/vaultwarden.yml
+  ```
+
+  The converge rewrites `compose.yaml` from the template and recreates the
+  container, which is what puts the setting back — leaving it open is a thing
+  you have to actively forget to undo.
+
+- **There is no admin token, on purpose.** Nothing here renders `ADMIN_TOKEN`,
+  so `/admin` just reports that it is disabled and no admin secret sits in vault
+  or on the host. If you ever need the panel (diagnostics, deleting a user), add
+  the variable to `{{ vaultwarden_dir }}/compose.yaml` on the host the same way,
+  and converge again when you are done.
 - **Published ports bypass UFW.** Docker publishes via DNAT, so a
   `ufw_group_rules` entry will *not* restrict the vault — `vaultwarden_bind_ip`
   is the access control. Keep it on an internal address (e.g. wg0's) if the
   vault should be VPN-only.
-- **The admin panel writes its own config.** Settings changed under `/admin` are
-  stored in `{{ vaultwarden_dir }}/data/config.json`, outside Ansible's control,
-  where they can shadow what this role renders. Change settings here and
-  converge instead.
-- **`$` in `.env` is compose syntax.** `openssl rand -base64 48` is a fine admin
-  token. If you prefer the hashed form
-  (`docker run --rm -it vaultwarden/server /vaultwarden hash`), double every `$`
-  in the value — `docker compose` interpolates `.env` and would otherwise eat
-  parts of the Argon2 string.
+- **The admin panel writes its own config.** Should you enable it by hand,
+  settings changed under `/admin` are stored in
+  `{{ vaultwarden_dir }}/data/config.json`, outside Ansible's control, where they
+  can shadow what this role renders. Change settings here and converge instead.
 - **Upgrades migrate the database.** Bumping `vaultwarden_version_tag` makes the
   next converge pull that release and migrate `data/db.sqlite3` on first start,
   which cannot be rolled back — read the release notes and take a backup first
@@ -95,11 +108,6 @@ password manager) as a Docker Compose stack. Needs the
 - `vaultwarden_dir` — compose project directory (default `/containers/vaultwarden`)
 - `vaultwarden_deploy` — bring the stack up (default `true`; the molecule
   scenario sets it `false` to render config only)
-- `vaultwarden_admin_token` — `/admin` panel token (vault; default empty = panel
-  disabled)
-- `vaultwarden_signups_allowed` — open registration (default `false`)
-- `vaultwarden_invitations_allowed` — let existing users invite others (default
-  `true`)
 - `vaultwarden_image` / `vaultwarden_version_tag` — image and tag, pinned to an
   exact release (default `vaultwarden/server:1.37.1`)
 - `vaultwarden_backup_enabled` — install the script and the cron job (default
@@ -131,7 +139,6 @@ vaultwarden_bind_ip: "10.10.0.1" # wg0 -> reachable over the VPN only
 
 vaultwarden_tls_cert: "{{ vault_vaultwarden_tls_cert }}"
 vaultwarden_tls_key: "{{ vault_vaultwarden_tls_key }}"
-vaultwarden_admin_token: "{{ vault_vaultwarden_admin_token }}"
 
 # vault.yml (ansible-vault)
 vault_vaultwarden_tls_cert: |
@@ -140,5 +147,7 @@ vault_vaultwarden_tls_cert: |
 vault_vaultwarden_tls_key: |
   -----BEGIN PRIVATE KEY-----
   ...
-vault_vaultwarden_admin_token: "..." # openssl rand -base64 48
 ```
+
+Accounts are not configured here at all — see the gotcha above for the manual
+way to register the first one.

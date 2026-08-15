@@ -56,17 +56,13 @@
   no_log: true
   notify: Restart vaultwarden
 
-# No handler: a changed value here changes the service's resolved compose
-# config, so 2_install.yml's `up` recreates the container on its own (a plain
-# restart would not re-read .env anyway).
-- name: Render Vaultwarden secrets env file
-  ansible.builtin.template:
-    src: vaultwarden.env.j2
-    dest: "{{ vaultwarden_dir }}/.env"
-    owner: root
-    group: root
-    mode: "0600"
-  no_log: true
+# Earlier versions of this role kept an admin token in a .env next to the
+# compose file. The token is gone, so drop the file too instead of leaving the
+# secret behind on hosts that were converged before.
+- name: Remove the obsolete Vaultwarden secrets env file
+  ansible.builtin.file:
+    path: "{{ vaultwarden_dir }}/.env"
+    state: absent
 
 - name: Render Vaultwarden compose file
   ansible.builtin.template:
