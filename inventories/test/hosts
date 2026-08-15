@@ -15,3 +15,6 @@ testhost-ubuntu-24.04
 
 [gitea]
 testhost-ubuntu-24.04
+
+[vaultwarden]
+testhost-ubuntu-24.04

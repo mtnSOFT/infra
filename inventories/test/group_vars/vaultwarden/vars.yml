@@ -1,0 +1,17 @@
+---
+# The test container has no docker daemon, so the stack is not brought up - the
+# scenario verifies the rendered configuration, which is where the role's logic
+# lives.
+vaultwarden_deploy: false
+
+# The role only mounts the pair, so the scenario's converge puts a placeholder at
+# these paths - there is no PEM material in this inventory, and this group has no
+# vault file any more.
+vaultwarden_tls_cert_file: "/etc/ssl/vaultwarden/fullchain.pem"
+vaultwarden_tls_key_file: "/etc/ssl/vaultwarden/privkey.pem"
+
+# Non-default values so the optional template branches are actually asserted: a
+# custom HTTPS port bound to a single IP, with that port carried in the domain.
+vaultwarden_domain: "https://vault.example.com:8443"
+vaultwarden_bind_ip: "10.10.0.1"
+vaultwarden_https_port: 8443

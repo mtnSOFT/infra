@@ -1,0 +1,175 @@
+import re
+
+import yaml
+
+BASE = "/containers/vaultwarden"
+BACKUP = f"{BASE}/backup"
+SCRIPT = "/usr/local/bin/vaultwarden-backup.sh"
+
+
+def _load(host, path):
+    """Parse a rendered config file - also proves the template emits valid YAML."""
+    return yaml.safe_load(host.file(path).content_string)
+
+
+def _service(host):
+    return _load(host, f"{BASE}/compose.yaml")["services"]["vaultwarden"]
+
+
+def test_directory_tree(host):
+    # The data directory holds the SQLite database and the token signing keys,
+    # so it stays root-only.
+    tree = ((BASE, 0o750), (f"{BASE}/data", 0o700))
+    for path, mode in tree:
+        directory = host.file(path)
+        assert directory.is_directory
+        assert directory.user == "root"
+        assert directory.group == "root"
+        assert directory.mode == mode
+
+
+def test_no_tls_material_is_copied_into_the_project(host):
+    # The pair is mounted from wherever its owner put it on the host, so nothing
+    # here holds a copy - including the ssl/ directory earlier versions of this
+    # role wrote the private key into, which a converge cleans up.
+    assert not host.file(f"{BASE}/ssl").exists
+
+
+def test_no_env_file_is_left_behind(host):
+    # The role carries no secret into the compose project any more, and cleans
+    # up the .env earlier versions wrote the admin token into.
+    assert not host.file(f"{BASE}/.env").exists
+
+
+def test_compose_file(host):
+    compose = host.file(f"{BASE}/compose.yaml")
+    assert compose.mode == 0o644
+    # compose.yaml is world-readable, so the private key may not be inlined here
+    assert "PRIVATE KEY" not in compose.content_string
+
+    services = _load(host, f"{BASE}/compose.yaml")["services"]
+    assert set(services) == {"vaultwarden"}
+
+    vaultwarden = services["vaultwarden"]
+    assert vaultwarden["container_name"] == "vaultwarden"
+    # An exact release, never a floating tag: an unplanned Vaultwarden upgrade
+    # migrates the database on first start and cannot be rolled back. Matched by
+    # shape, so bumping vaultwarden_version_tag does not mean editing this test.
+    assert re.fullmatch(r"vaultwarden/server:\d+\.\d+\.\d+", vaultwarden["image"])
+    assert vaultwarden["restart"] == "unless-stopped"
+    # Everything persistent is in the one data volume; the certificate is mounted
+    # read-only beside it (asserted in detail below)
+    assert vaultwarden["volumes"][0] == f"{BASE}/data:/data"
+
+
+def test_published_port_is_the_configured_https_port(host):
+    # vaultwarden_bind_ip / vaultwarden_https_port from the test group_vars; the
+    # container itself listens on 80, with TLS on top (see ROCKET_TLS below).
+    assert _service(host)["ports"] == ["10.10.0.1:8443:80"]
+
+
+def test_tls_is_terminated_by_vaultwarden(host):
+    assert _service(host)["environment"]["ROCKET_TLS"] == (
+        '{certs="/ssl/cert.pem",key="/ssl/key.pem"}'
+    )
+
+
+def test_certificate_is_mounted_read_only_from_the_host(host):
+    # vaultwarden_tls_cert_file / vaultwarden_tls_key_file from the test
+    # inventory, mounted per file and never copied - so renewing the certificate
+    # is its owner's job, and takes a container restart.
+    assert _service(host)["volumes"][1:] == [
+        "/etc/ssl/vaultwarden/fullchain.pem:/ssl/cert.pem:ro",
+        "/etc/ssl/vaultwarden/privkey.pem:/ssl/key.pem:ro",
+    ]
+
+
+def test_domain_carries_the_custom_port(host):
+    # Passkey origin and the base of invitation links, so it has to match what
+    # the browser shows - port included.
+    assert _service(host)["environment"]["DOMAIN"] == (
+        "https://vault.example.com:8443"
+    )
+
+
+def test_database_is_sqlite(host):
+    # No DATABASE_URL at all: that is what makes Vaultwarden fall back to SQLite
+    # in /data, the whole point of this stack.
+    assert "DATABASE_URL" not in _service(host)["environment"]
+
+
+def test_backup_directory_and_script(host):
+    # The archives hold the token signing keys and every attachment, so both the
+    # directory and the script that writes it stay root-only.
+    backup = host.file(BACKUP)
+    assert backup.is_directory
+    assert backup.user == "root"
+    assert backup.group == "root"
+    assert backup.mode == 0o700
+
+    script = host.file(SCRIPT)
+    assert script.exists
+    assert script.user == "root"
+    assert script.mode == 0o700
+
+
+def test_backup_runs_daily_from_cron(host):
+    crontab = host.file("/var/spool/cron/crontabs/root").content_string
+    # The marker ansible.builtin.cron writes, so the job stays managed
+    assert "#Ansible: Vaultwarden backup" in crontab
+    assert f"30 3 * * * {SCRIPT}" in crontab
+
+
+def test_backup_archives_the_data_and_keeps_the_last_ten(host):
+    # The container never ran in this scenario, so stand in for it: a database
+    # with one row and an attachment beside it.
+    host.check_output(
+        f"sqlite3 {BASE}/data/db.sqlite3 'create table if not exists t(x); "
+        "delete from t; insert into t values (1)'"
+    )
+    # -D so the attachments directory Vaultwarden would have created appears too
+    host.check_output(f"install -D -m 600 /dev/null {BASE}/data/attachments/x.bin")
+
+    # Twelve older archives, so the run has more than ten to prune down to
+    host.check_output(
+        "for d in $(seq -w 1 12); do "
+        f"f={BACKUP}/vaultwarden-202001$d-000000.tar.gz; "
+        'echo stale > "$f"; touch -d "2020-01-$d 00:00:00" "$f"; done'
+    )
+
+    host.check_output(SCRIPT)
+
+    listed = host.check_output(f"ls -1t {BACKUP}/vaultwarden-*.tar.gz")
+    archives = listed.splitlines()
+    assert len(archives) == 10
+    # Newest first: the fresh archive, then the stale ones that survived
+    newest = archives[0]
+    assert newest.startswith(f"{BACKUP}/vaultwarden-")
+    assert "-202001" not in newest
+    assert f"{BACKUP}/vaultwarden-20200112-000000.tar.gz" in archives
+    assert f"{BACKUP}/vaultwarden-20200101-000000.tar.gz" not in archives
+
+    assert host.file(newest).mode == 0o600
+    members = host.check_output(f"tar tzf {newest}").split()
+    assert "./attachments/x.bin" in members
+    # The consistent copy sits at the archive root; the live database and its
+    # WAL/SHM sidecars are excluded so a torn file cannot shadow it.
+    assert "db.sqlite3" in members
+    assert "./db.sqlite3" not in members
+
+    # The copy is a working database, not just a file that happens to exist
+    restored = host.check_output(
+        f"tmp=$(mktemp -d) && tar xzf {newest} -C $tmp db.sqlite3 && "
+        "sqlite3 $tmp/db.sqlite3 'select count(*) from t'"
+    )
+    assert restored == "1"
+
+
+def test_account_creation_is_closed_off(host):
+    env = _service(host)["environment"]
+    # Both default to true upstream, so they have to be rendered explicitly -
+    # as the strings Vaultwarden parses, not YAML booleans
+    assert env["SIGNUPS_ALLOWED"] == "false"
+    assert env["INVITATIONS_ALLOWED"] == "false"
+    # No admin token anywhere, which leaves the /admin panel disabled
+    assert "ADMIN_TOKEN" not in env

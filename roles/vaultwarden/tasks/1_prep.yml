@@ -1,0 +1,101 @@
+---
+# The domain and the TLS pair are the settings that cannot be guessed: without a
+# certificate Rocket refuses to start, and a wrong DOMAIN silently breaks
+# invitation links and passkeys. Fail here instead of in a container restart
+# loop.
+- name: Validate Vaultwarden settings
+  ansible.builtin.assert:
+    that:
+      - vaultwarden_domain | length > 0
+      - vaultwarden_domain is match('https://')
+      - vaultwarden_tls_cert_file | length > 0
+      - vaultwarden_tls_key_file | length > 0
+    fail_msg: >-
+      vaultwarden_domain must be the external https:// URL clients use, including
+      the port when it is not 443 (e.g. https://vault.example.com:8443), and
+      vaultwarden_tls_cert_file / vaultwarden_tls_key_file must be the host paths
+      of the PEM certificate chain and its private key.
+  # ansible.cfg turns no_log on for every task, which would censor the message
+  # that makes this failure actionable. These are paths, not key material.
+  no_log: false
+
+# get_checksum: false - the metadata is all that matters here, and there is no
+# reason to read a private key just to hash it. follow: true because an ACME
+# client's path is typically a symlink into its own archive (certbot's live/…),
+# which is what the docker daemon resolves when it sets the mount up too.
+- name: Stat the Vaultwarden TLS certificate and key
+  ansible.builtin.stat:
+    path: "{{ item }}"
+    get_checksum: false
+    follow: true
+  loop:
+    - "{{ vaultwarden_tls_cert_file }}"
+    - "{{ vaultwarden_tls_key_file }}"
+  register: vaultwarden_tls_stat
+
+# Both files are bind-mounted, and the docker daemon happily creates an empty
+# directory for a source path that does not exist - which Rocket then crash-loops
+# on. Failing here says why; the container's exit code would not. No permission
+# check, unlike the gitea role: this container runs as root, so a 0600 key owned
+# by root is read fine.
+- name: Assert the Vaultwarden TLS certificate and key are present
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists
+      - item.stat.isreg
+    fail_msg: >-
+      {{ item.item }} must exist and be a file - it is mounted into the
+      container, never copied, so whatever puts the certificate on this host has
+      to have run before this role.
+  # See above: without this the failure would be reported as censored output.
+  no_log: false
+  loop: "{{ vaultwarden_tls_stat.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+# The data directory holds the SQLite database, the attachments and the RSA keys
+# Vaultwarden signs its tokens with, so it stays root-only; the container runs as
+# root and reads it through the bind mount. No ssl directory any more - the
+# certificate stays where its owner on the host put it.
+- name: Create Vaultwarden directory tree
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - path: "{{ vaultwarden_dir }}"
+      mode: "0750"
+    - path: "{{ vaultwarden_dir }}/data"
+      mode: "0700"
+  loop_control:
+    label: "{{ item.path }}"
+
+# Earlier versions of this role kept an admin token in a .env next to the
+# compose file. The token is gone, so drop the file too instead of leaving the
+# secret behind on hosts that were converged before.
+- name: Remove the obsolete Vaultwarden secrets env file
+  ansible.builtin.file:
+    path: "{{ vaultwarden_dir }}/.env"
+    state: absent
+
+# Same for the ssl directory those versions copied the PEM pair into: the files
+# are mounted from their own location now, so that copy of the private key has no
+# reason to stay on disk. Skipped when the configured paths point back into it -
+# somebody may well keep the certificate exactly there.
+- name: Remove the obsolete Vaultwarden TLS copies
+  ansible.builtin.file:
+    path: "{{ vaultwarden_dir }}/ssl"
+    state: absent
+  when:
+    - not vaultwarden_tls_cert_file.startswith(vaultwarden_dir ~ '/ssl/')
+    - not vaultwarden_tls_key_file.startswith(vaultwarden_dir ~ '/ssl/')
+
+- name: Render Vaultwarden compose file
+  ansible.builtin.template:
+    src: compose.yaml.j2
+    dest: "{{ vaultwarden_dir }}/compose.yaml"
+    owner: root
+    group: root
+    mode: "0644"

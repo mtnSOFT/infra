@@ -1,0 +1,38 @@
+# Ansible managed
+#
+# Vaultwarden terminates TLS itself (ROCKET_TLS), so the published port is HTTPS
+# and there is no reverse proxy in front of it. Docker publishes via DNAT and
+# bypasses UFW's INPUT chain, so vaultwarden_bind_ip is the access control.
+services:
+  vaultwarden:
+    container_name: vaultwarden
+    image: {{ vaultwarden_image }}:{{ vaultwarden_version_tag }}
+    environment:
+      TZ: "{{ timezone | default('UTC') }}"
+      # External URL clients use. It goes into invitation and password-reset
+      # links and is the passkey/WebAuthn origin, so it has to include the port
+      # when that is not 443.
+      DOMAIN: "{{ vaultwarden_domain }}"
+      # Serve HTTPS straight from the mounted certificate. Rocket reads both
+      # files once at startup - a renewed certificate needs a container restart,
+      # which no converge triggers now that the role does not write them.
+      ROCKET_TLS: '{certs="/ssl/cert.pem",key="/ssl/key.pem"}'
+      # No DATABASE_URL: Vaultwarden then uses SQLite at /data/db.sqlite3.
+      # Nobody can add themselves to this vault: registration and invitations
+      # are both off and there is no ADMIN_TOKEN either, so the /admin panel
+      # stays disabled and no admin secret has to be kept in vault or on disk.
+      # Upstream defaults both of these to true, hence the explicit false.
+      # Creating an account is a deliberate manual step - see the README.
+      SIGNUPS_ALLOWED: "false"
+      INVITATIONS_ALLOWED: "false"
+    volumes:
+      # Database, attachments and the token signing keys
+      - "{{ vaultwarden_dir }}/data:/data"
+      # The certificate stays where its owner on the host put it and is mounted
+      # read-only, one file at a time so nothing else in that directory comes
+      # along - and outside /data, which the backup script archives.
+      - "{{ vaultwarden_tls_cert_file }}:/ssl/cert.pem:ro"
+      - "{{ vaultwarden_tls_key_file }}:/ssl/key.pem:ro"
+    ports:
+      - "{{ vaultwarden_bind_ip }}:{{ vaultwarden_https_port }}:80"
+    restart: unless-stopped
