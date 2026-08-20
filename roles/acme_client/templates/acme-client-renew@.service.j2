@@ -1,0 +1,42 @@
+# Ansible managed - DO NOT EDIT MANUALLY
+#
+# Template unit: one instance per certificate, named after its zone, e.g.
+# acme-client-renew@int.example.com.service. Instances are started by the
+# matching timer; running one by hand is a fine way to force a check.
+[Unit]
+Description=Obtain or renew the %i certificate (ACME DNS-01)
+Documentation=https://go-acme.github.io/lego/
+# Both the ACME directory and the DNS API need routing and working DNS.
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/acme-client-renew.sh %i
+
+# Only the PATH of the token appears here. lego reads any of its INFOMANIAK_*
+# settings from a <VAR>_FILE, which keeps the token out of this file - which is
+# world-readable and printed by `systemctl cat` - and out of the environment
+# inherited by the reload commands, which would otherwise hand a credential that
+# can rewrite every zone in the account to `docker compose`, whose environment
+# turns up in `docker inspect`.
+Environment=INFOMANIAK_ACCESS_TOKEN_FILE={{ acme_client_token_file }}
+{% for key, value in acme_client_provider_env | dictsort %}
+Environment={{ key }}={{ value }}
+{% endfor %}
+
+# Type=oneshot has no start timeout by default, which is what makes lego's own
+# pre-renewal sleep safe. But it also means a renewal wedged on the DNS API would
+# leave this unit "activating" forever, and systemd skips a timer trigger whose
+# unit is still running - this certificate's renewals would stop for good,
+# quietly. Bound it.
+TimeoutStartSec={{ acme_client_renew_timeout }}
+
+# The reload commands run arbitrary things, so the sandbox stays deliberately
+# light: ProtectSystem= here would block the writes to the deploy directory and
+# ambush whoever adds the next command.
+NoNewPrivileges=true
+ProtectHome=true
+PrivateTmp=true
+
+# No [Install] section: the timer is what pulls this in.

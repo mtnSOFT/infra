@@ -1,0 +1,26 @@
+---
+# Task files run in order. Tags let you run a subset, e.g. `--tags install`.
+# To add a task file, drop it in this folder and add an import below.
+#
+# Note the ordering of the last two: the timers are installed before anything
+# talks to a CA, so a certificate that fails to issue during a converge retries
+# on its own schedule instead of needing someone to come back and re-run.
+
+# `always` as well as `prep`, because everything below reads the facts this file
+# resolves - the lego paths, the normalised certificate list, the zones that have
+# been retired. Without it, any subset run (`--tags install`, `--tags
+# certificate`) fails on an undefined variable rather than doing less work.
+- import_tasks: 1_prep.yml
+  tags: [prep, always]
+
+- import_tasks: 2_install.yml
+  tags: [install]
+
+- import_tasks: 3_config.yml
+  tags: [config]
+
+- import_tasks: 4_service.yml
+  tags: [service]
+
+- import_tasks: 9_certificate.yml
+  tags: [certificate]

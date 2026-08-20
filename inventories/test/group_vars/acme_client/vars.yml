@@ -1,0 +1,45 @@
+---
+# The test container has no route to a CA and no DNS provider credentials, so
+# nothing is issued - the scenario verifies the rendered configuration and then
+# exercises the deploy script directly against placeholder files, which is where
+# the role's logic actually lives.
+acme_client_issue: false
+
+# There is no systemd as PID 1 in the container, so the timers are rendered but
+# not enabled.
+acme_client_enable_timers: false
+
+acme_client_email: "acme-test@example.internal"
+acme_client_dns_api_token: "{{ vault_acme_client_dns_api_token }}"
+
+# Non-default values, so the assertions cannot pass by accidentally matching the
+# role defaults.
+acme_client_renew_days: 45
+acme_client_dns_resolvers:
+  - "9.9.9.9:53"
+  - "149.112.112.112:53"
+
+# Two certificates, because everything interesting here is per-certificate: the
+# first overrides most of what can be overridden, the second is bare so the
+# fallbacks to the acme_client_default_* values are exercised too. Only the first
+# has reload commands, so the "no reload script at all" branch is covered.
+#
+# The zones are under .internal, a reserved TLD, so even a mis-gated converge
+# could not reach a real CA.
+acme_client_certificates:
+  - zone: "int.example.internal"
+    # Several wildcards in one certificate is legitimate; the deeper name is not
+    # covered by the first one.
+    domains:
+      - "*.int.example.internal"
+      - "int.example.internal"
+      - "*.dev.int.example.internal"
+    # What a host running gitea needs: its container reads the mounted key as
+    # uid/gid 1000.
+    key_group: "1000"
+    renew_days: 34
+    reload_commands:
+      - "docker compose -f /containers/gitea/compose.yaml restart gitea"
+      - "docker compose -f /containers/vaultwarden/compose.yaml restart vaultwarden"
+
+  - zone: "lab.example.internal"

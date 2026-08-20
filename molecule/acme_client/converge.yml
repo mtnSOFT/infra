@@ -1,0 +1,42 @@
+---
+# Test values live in inventories/test/group_vars/acme_client/, including a vault
+# file holding a stand-in API token - the role requires one to be set, and the
+# scenario asserts it is never written anywhere but its own 0600 file.
+- name: Converge
+  hosts: acme_client
+  become: true
+
+  pre_tasks:
+    # Stand-ins for what lego would have written, so the deploy half of the role
+    # can be exercised end to end without a CA, a DNS provider or a network.
+    # The paths are spelled out rather than taken from the role's own facts, so
+    # they independently check the derivation: the state directory is named after
+    # the ACME server's host, and the certificate after the first domain with
+    # "*" replaced by "_".
+    #
+    # Only int.example.internal gets these. lab.example.internal is deliberately
+    # left with nothing, which is what lets the tests cover the "not issued yet"
+    # branch - a converge of a host whose first run has not happened must be a
+    # silent no-op, not an error.
+    - name: Create the lego certificates directory for testing
+      ansible.builtin.file:
+        path: /var/lib/acme_client/acme-v02.api.letsencrypt.org/certificates
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: Create a placeholder issued certificate and key for testing
+      ansible.builtin.copy:
+        content: "molecule placeholder {{ item }} - not a real key\n"
+        dest: >-
+          /var/lib/acme_client/acme-v02.api.letsencrypt.org/certificates/_.int.example.internal.{{ item }}
+        owner: root
+        group: root
+        mode: "0600"
+      loop:
+        - crt
+        - key
+
+  roles:
+    - role: acme_client

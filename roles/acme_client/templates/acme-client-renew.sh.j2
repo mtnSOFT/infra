@@ -1,0 +1,92 @@
+#!/bin/sh
+# Ansible managed - DO NOT EDIT MANUALLY
+#
+# Obtain or renew one certificate, then deploy it.
+#
+#   acme-client-renew.sh <zone> [--now]
+#
+# Called with just the zone by acme-client-renew@<zone>.service, and with --now
+# by an Ansible converge. --now drops lego's own pre-renewal sleep, which is up
+# to eight minutes whenever stdout is not a terminal: Ansible gives it a pipe, so
+# without --now an interactive run looks hung and gets interrupted. From the
+# timer the jitter is wanted, so systemd does not pass it.
+#
+# The two lego subcommands are NOT interchangeable, and picking between them here
+# is the point of this script:
+#
+#   run   - ALWAYS obtains a new certificate. It does not look at what is
+#           already on disk and does not fail when a certificate is there; it
+#           overwrites it. On a schedule that means a duplicate issuance every
+#           single day, which exhausts the limit - 5 per identical name set per
+#           7 days, with no renewal exemption - inside a week.
+#   renew - reads the certificate on disk and returns without touching the
+#           network while more than --days of validity are left.
+#
+# So: run once to bootstrap, renew from then on.
+#
+# The deploy step runs afterwards unconditionally rather than as a lego
+# --renew-hook. That way a converge repairs a deployed pair that went missing
+# without waiting for the next renewal, and a deploy that failed once is retried
+# on the next tick - with a --renew-hook it would be skipped for three months,
+# because lego would consider the certificate fresh.
+set -eu
+
+ZONE="${1:-}"
+if [ -z "$ZONE" ]; then
+  echo "usage: $0 <zone> [--now]" >&2
+  exit 2
+fi
+
+CONF="{{ acme_client_config_dir }}/certs/${ZONE}.conf"
+if [ ! -f "$CONF" ]; then
+  echo "acme-client: no configuration for '$ZONE' at $CONF" >&2
+  exit 2
+fi
+# shellcheck source=/dev/null
+. "$CONF"
+
+no_sleep=""
+if [ "${2:-}" = "--now" ]; then
+  no_sleep="--no-random-sleep"
+fi
+
+# lego wants its global flags before the subcommand. Appending to "$@" in a loop
+# avoids a line continuation inside a for loop, which is the usual way this kind
+# of argument building goes wrong.
+set -- --accept-tos \
+  --email "$EMAIL" \
+  --server "$SERVER" \
+  --path "$LEGO_DIR" \
+  --dns "$DNS_PROVIDER" \
+  --key-type "$KEY_TYPE"
+
+# Word splitting is intended: the role validates that these are plain
+# host:port pairs and plain DNS names, so neither can contain whitespace.
+# shellcheck disable=SC2086
+for resolver in $DNS_RESOLVERS; do
+  set -- "$@" --dns.resolvers "$resolver"
+done
+
+# shellcheck disable=SC2086
+for domain in $DOMAINS; do
+  set -- "$@" -d "$domain"
+done
+
+if [ -f "$SRC_CERT" ]; then
+  # $no_sleep is one optional flag or the empty string, so it must stay unquoted.
+  # shellcheck disable=SC2086
+  "$LEGO_BIN" "$@" renew --days "$RENEW_DAYS" $no_sleep
+else
+  "$LEGO_BIN" "$@" run
+fi
+
+# lego names its output after the FIRST -d, with "*" replaced by "_". If that
+# ever stops holding - a reordered domain list, an upstream change - the deploy
+# below would find nothing and silently do nothing, leaving a stale certificate
+# in place until it expired. Fail here instead.
+if [ ! -f "$SRC_CERT" ]; then
+  echo "acme-client: lego reported success but $SRC_CERT is missing" >&2
+  exit 1
+fi
+
+exec /usr/local/bin/acme-client-deploy.sh "$ZONE"

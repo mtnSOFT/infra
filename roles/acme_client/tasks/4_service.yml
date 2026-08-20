@@ -1,0 +1,47 @@
+---
+# daemon_reload here rather than a handler: nothing this role installs is
+# long-running, so there is no service to restart when a unit file changes, and a
+# handler would only add a question about whether it fires before the timers are
+# enabled.
+#
+# state: started, not restarted - restarting a timer re-draws its randomized
+# delay, which achieves nothing and makes `list-timers` output move around
+# between converges for no reason.
+- name: Enable the acme_client renewal timers
+  ansible.builtin.systemd:
+    name: "acme-client-renew@{{ item.zone }}.timer"
+    daemon_reload: true
+    enabled: true
+    state: started
+  loop: "{{ _acme_client_certs }}"
+  loop_control:
+    label: "{{ item.zone }}"
+  when: acme_client_enable_timers | bool
+
+# Stop before deleting, in this order: a timer left enabled with its config
+# removed would fire, find no .conf, and fail - turning a tidy retirement into a
+# nightly failed unit. `failed_when: false` because the unit may already be gone
+# on a host where the timers were never enabled in the first place.
+- name: Stop the retired acme_client renewal timers
+  ansible.builtin.systemd:
+    name: "acme-client-renew@{{ item }}.timer"
+    enabled: false
+    state: stopped
+  loop: "{{ _acme_client_retired_zones }}"
+  register: _acme_client_retired_stop
+  failed_when: false
+  when: acme_client_enable_timers | bool
+
+# Only the role's own configuration is removed. The deployed certificate in
+# /etc/ssl/<zone>/ and lego's state, including the private key, are deliberately
+# left alone: retiring a certificate from Ansible's management is not the same
+# request as destroying key material, and something may still be serving it.
+- name: Remove the retired acme_client configuration
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop: >-
+    {{ _acme_client_retired_zones
+       | map('regex_replace', '^(.*)$', acme_client_config_dir + '/certs/\1.conf') | list
+       + _acme_client_retired_zones
+       | map('regex_replace', '^(.*)$', acme_client_config_dir + '/reload.d/\1.sh') | list }}

@@ -1,0 +1,96 @@
+---
+# lego reads any of its INFOMANIAK_* settings from a <VAR>_FILE path, which is
+# why the token gets a file of its own instead of an Environment= line or an
+# EnvironmentFile=. Both of those would put it somewhere it does not belong: unit
+# files are world-readable and printed by `systemctl cat`, and an
+# EnvironmentFile= is loaded into the service's process environment, which the
+# reload commands inherit - handing a zone-rewriting credential to
+# `docker compose`, whose environment shows up in `docker inspect`. With _FILE
+# only the path is anywhere visible.
+#
+# The trailing newline is deliberate and load-bearing: lego strips exactly one
+# "\n" and no other whitespace, so a value with a trailing space or a second
+# newline is sent to the API verbatim and comes back as a 401 that says nothing
+# about why. `| trim` plus one explicit "\n" is the only safe rendering; keep the
+# vault value a plain quoted scalar, since a YAML "> " block adds its own
+# newline on top.
+- name: Render the acme_client DNS API token
+  ansible.builtin.copy:
+    content: "{{ acme_client_dns_api_token | trim }}\n"
+    dest: "{{ acme_client_token_file }}"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+# Two generic scripts, rendered once, that take the zone as their first argument
+# and read everything else from that zone's .conf. The alternative - a script per
+# certificate - would mean N copies of the same logic drifting apart.
+- name: Render the acme_client scripts
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/usr/local/bin/{{ item }}"
+    owner: root
+    group: root
+    mode: "0700"
+  loop:
+    - acme-client-renew.sh
+    - acme-client-deploy.sh
+
+# Template units, instantiated per zone as acme-client-renew@<zone>.timer. One
+# instance per certificate buys per-zone isolation (a zone whose DNS API is down
+# cannot hold up the others), a journal per zone, and an independently drawn
+# randomized delay.
+- name: Render the acme_client systemd units
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - acme-client-renew@.service
+    - acme-client-renew@.timer
+
+# 0640 rather than 0600 only because it holds no secrets - just names, paths and
+# permissions. It lives in a 0700 directory regardless.
+- name: Render the acme_client certificate configs
+  ansible.builtin.template:
+    src: acme-client-cert.conf.j2
+    dest: "{{ item.conf_file }}"
+    owner: root
+    group: root
+    mode: "0640"
+  loop: "{{ _acme_client_certs }}"
+  loop_control:
+    label: "{{ item.zone }}"
+
+# The reload commands go in a script of their own rather than into the .conf,
+# because they are arbitrary strings: embedding them in a sourced shell file
+# would mean quoting them correctly for a shell that has not parsed them yet. As
+# a script they are just lines, and the deploy step runs it only if it exists -
+# so a certificate with no consumers on this host needs no file at all.
+- name: Render the acme_client reload scripts
+  ansible.builtin.template:
+    src: acme-client-reload.sh.j2
+    dest: "{{ item.reload_script }}"
+    owner: root
+    group: root
+    mode: "0700"
+  loop: "{{ _acme_client_certs }}"
+  loop_control:
+    label: "{{ item.zone }}"
+  when: item.reload_commands | length > 0
+
+# Dropping the reload commands from an entry must actually stop the reloads,
+# which a `when:` on the task above cannot do on its own - the file from the last
+# converge would just stay there.
+- name: Remove obsolete acme_client reload scripts
+  ansible.builtin.file:
+    path: "{{ item.reload_script }}"
+    state: absent
+  loop: "{{ _acme_client_certs }}"
+  loop_control:
+    label: "{{ item.zone }}"
+  when: item.reload_commands | length == 0
+

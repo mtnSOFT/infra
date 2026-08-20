@@ -1,0 +1,70 @@
+#!/bin/sh
+# Ansible managed - DO NOT EDIT MANUALLY
+#
+# Copy the certificate lego holds for one zone into the stable paths the services
+# read, then tell them about it.
+#
+#   acme-client-deploy.sh <zone>
+#
+# Idempotent and silent on purpose: it compares first and does nothing, printing
+# nothing, when the deployed pair already matches. That is what lets both the
+# renewal unit and an Ansible converge call it unconditionally - the converge
+# reports "changed" only when a file actually moved.
+#
+# Real files, never symlinks. Consumer roles stat these paths WITHOUT following
+# links and require a regular file, so a symlink into lego's directory would
+# break them.
+#
+# Replaced by rename rather than written in place: the owner and mode are set on
+# the temporary file first, so the private key is never briefly world-readable
+# and nothing on the host can read a half-written PEM. Two renames back to back
+# also shrink the window where the certificate and key on disk do not match each
+# other to microseconds.
+#
+# The rename gives each file a new inode, which is exactly why the reload script
+# below is not optional: Docker bind-mounts a single file by inode, so a running
+# container goes on reading the file it started with no matter what replaces the
+# path. Every consumer here also reads its certificate once, at startup.
+set -eu
+
+ZONE="${1:-}"
+if [ -z "$ZONE" ]; then
+  echo "usage: $0 <zone>" >&2
+  exit 2
+fi
+
+CONF="{{ acme_client_config_dir }}/certs/${ZONE}.conf"
+if [ ! -f "$CONF" ]; then
+  echo "acme-client: no configuration for '$ZONE' at $CONF" >&2
+  exit 2
+fi
+# shellcheck source=/dev/null
+. "$CONF"
+
+# Nothing issued yet. Reached on a converge of a host whose first run has not
+# happened, or been gated off - not an error.
+if [ ! -f "$SRC_CERT" ] || [ ! -f "$SRC_KEY" ]; then
+  exit 0
+fi
+
+# Already current: no copy, no reload, no output.
+if cmp -s "$SRC_CERT" "$DST_CERT" && cmp -s "$SRC_KEY" "$DST_KEY"; then
+  exit 0
+fi
+
+umask 077
+install -o "$CERT_OWNER" -g "$CERT_GROUP" -m "$CERT_MODE" "$SRC_CERT" "$DST_CERT.new"
+install -o "$KEY_OWNER" -g "$KEY_GROUP" -m "$KEY_MODE" "$SRC_KEY" "$DST_KEY.new"
+
+# Same directory, so these are renames within one filesystem rather than copies.
+mv -f "$DST_CERT.new" "$DST_CERT"
+mv -f "$DST_KEY.new" "$DST_KEY"
+
+# The marker 9_certificate.yml matches on to report the task as changed.
+echo "acme-client: deployed $DST_CERT and $DST_KEY"
+
+# Absent when the certificate has no consumers on this host. Correct only if
+# nothing here is holding the old file open.
+if [ -x "$RELOAD_SCRIPT" ]; then
+  exec "$RELOAD_SCRIPT"
+fi

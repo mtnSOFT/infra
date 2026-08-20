@@ -19,6 +19,7 @@ directory structure:
 
 | Role                                             | Description                                                                |
 |--------------------------------------------------|----------------------------------------------------------------------------|
+| [acme_client](roles/acme_client/README.md)       | Wildcard TLS certificates via ACME DNS-01, renewed by systemd timers       |
 | [docker-compose](roles/docker-compose/README.md) | Docker Engine + Compose plugin from the official apt repo                  |
 | [dyndns_client](roles/dyndns_client/README.md)   | Keeps a dynamic DNS record up to date via cron                             |
 | [gitea](roles/gitea/README.md)                   | Gitea self-hosted git service as a Docker Compose stack                    |

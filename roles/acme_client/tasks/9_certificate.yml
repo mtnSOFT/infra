@@ -1,0 +1,143 @@
+---
+# This runs after the timers are installed, deliberately: a certificate that
+# fails here is already covered by its own timer and will be retried tonight
+# without anyone coming back to re-run the playbook.
+#
+# Calling this on every converge is free. `lego renew` reads the certificate on
+# disk and returns without touching the network while more than renew_days of
+# validity are left, so the common case is a few milliseconds per zone. What it
+# buys is the first certificate landing on a fresh host immediately, instead of
+# up to a day later - long enough for a consumer role's certificate assertion to
+# fail on the very first run.
+#
+# --now suppresses lego's own pre-renewal sleep, which is up to eight minutes
+# whenever stdout is not a terminal. Ansible's command module gives it a pipe, so
+# without this an interactive converge that hits a real renewal looks hung and
+# gets interrupted. The systemd unit does not pass it: there, the jitter is
+# wanted.
+- name: Obtain or renew the acme_client certificates
+  ansible.builtin.command:
+    cmd: "/usr/local/bin/acme-client-renew.sh {{ item.zone }} --now"
+  register: _acme_client_renew
+  # Both of these are constants on purpose. ansible-core no longer exposes a
+  # module's result fields (stdout, rc) to changed_when/failed_when, so the two
+  # questions this task used to answer inline - did anything change, did anything
+  # fail - are answered by the two tasks below, which read the registered
+  # results and can therefore see stdout.
+  #
+  # Not failing here also means bringing up three zones at once reports all three
+  # failures in one run rather than stopping at the first.
+  changed_when: false
+  failed_when: false
+  # The output of this task *is* the story when something goes wrong, and there
+  # is nothing secret in it - lego reads the API token from a file, so it never
+  # appears in the command line or the environment.
+  no_log: false
+  loop: "{{ _acme_client_certs }}"
+  loop_control:
+    label: "{{ item.zone }}"
+  when: acme_client_issue | bool
+
+# Reports "changed" for exactly the zones whose deploy actually replaced a pair,
+# and nothing at all when every certificate was already current - which is the
+# common case, since a not-due renewal does not touch the network or the disk.
+- name: Report the acme_client certificates that were deployed
+  ansible.builtin.debug:
+    msg: "{{ item.item.zone }}: {{ item.stdout }}"
+  changed_when: true
+  no_log: false
+  loop: >-
+    {{ _acme_client_renew.results | default([])
+       | selectattr('stdout', 'defined')
+       | selectattr('stdout', 'search', 'acme-client: deployed') | list }}
+  loop_control:
+    label: "{{ item.item.zone }}"
+  when: acme_client_issue | bool
+
+- name: Assert every acme_client certificate was obtained
+  ansible.builtin.assert:
+    that:
+      - _acme_client_renew.results | rejectattr('rc', 'equalto', 0) | list | length == 0
+    fail_msg: >-
+      lego failed for
+      {{ _acme_client_renew.results | rejectattr('rc', 'equalto', 0)
+         | map(attribute='item.zone') | list | join(', ') }}.
+      If it waited and then timed out, the DNS-01 pre-check is almost certainly
+      resolving the challenge name against the internal DNS instead of the
+      public zone - check acme_client_dns_resolvers, and compare
+      `dig @1.1.1.1 SOA _acme-challenge.<zone>` with `dig SOA
+      _acme-challenge.<zone>`. Do not simply re-run: `lego run` issues a new
+      certificate every time, and the limit is 5 per identical name set per 7
+      days. Output:
+      {{ _acme_client_renew.results | rejectattr('rc', 'equalto', 0)
+         | map(attribute='stderr') | list }}
+  no_log: false
+  when: acme_client_issue | bool
+
+# Verifying the deploy step landed, at the point the certificate is produced.
+# Without this the first thing to notice a missing or unreadable key is the
+# consumer role several plays later, or the container crash-looping after it.
+- name: Stat the deployed acme_client certificates
+  ansible.builtin.stat:
+    path: "{{ item.cert_file }}"
+    get_checksum: false
+  register: _acme_client_cert_stat
+  loop: "{{ _acme_client_certs }}"
+  loop_control:
+    label: "{{ item.zone }}"
+  when: acme_client_issue | bool
+
+- name: Stat the deployed acme_client private keys
+  ansible.builtin.stat:
+    path: "{{ item.key_file }}"
+    get_checksum: false
+  register: _acme_client_key_stat
+  loop: "{{ _acme_client_certs }}"
+  loop_control:
+    label: "{{ item.zone }}"
+  when: acme_client_issue | bool
+
+- name: Assert the deployed acme_client certificates are in place
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists
+      # isreg, not just exists: consumer roles stat these paths and require a
+      # regular file, so a symlink here would break them. Nothing in this role
+      # creates one, and this is what keeps that true.
+      - item.stat.isreg
+    fail_msg: >-
+      {{ item.item.cert_file }} is missing or is not a regular file after a
+      successful lego run for {{ item.item.zone }}. Check
+      /usr/local/bin/acme-client-deploy.sh and the source path
+      {{ item.item.src_cert }}.
+  no_log: false
+  loop: "{{ _acme_client_cert_stat.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item.zone }}"
+  when: acme_client_issue | bool
+
+# The group and mode are checked, not just existence: this is the pair that
+# decides whether a consumer can actually read the key, and getting it wrong
+# produces a container that crash-loops with an error about the file rather than
+# about its permissions.
+- name: Assert the deployed acme_client private keys are readable by their consumers
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists
+      - item.stat.isreg
+      - item.stat.mode == item.item.key_mode
+      - >-
+        item.stat.gr_name == item.item.key_group
+        or (item.stat.gid | string) == (item.item.key_group | string)
+    fail_msg: >-
+      {{ item.item.key_file }} should be mode {{ item.item.key_mode }} and group
+      {{ item.item.key_group }}, but is mode
+      {{ item.stat.mode | default('<missing>') }} and group
+      {{ item.stat.gr_name | default('<missing>') }}. A consumer that reads the
+      mounted key as a non-root user - gitea reads it as uid/gid 1000 - cannot
+      open it and will crash-loop.
+  no_log: false
+  loop: "{{ _acme_client_key_stat.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item.zone }}"
+  when: acme_client_issue | bool
