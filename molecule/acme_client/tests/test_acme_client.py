@@ -56,11 +56,19 @@ def test_api_token_is_written_only_to_its_own_file(host):
     assert token.group == "root"
     assert token.mode == 0o600
 
-    # Exactly one trailing newline. lego strips one "\n" and no other
-    # whitespace, so a second newline or a trailing space is sent to the API
-    # verbatim and comes back as a 401 that explains nothing.
-    assert token.content_string == f"{TOKEN}\n"
-    assert token.content_string.count("\n") == 1
+    # The value, compared loosely on purpose: testinfra's ansible backend reads
+    # file content through a command, and Ansible strips trailing whitespace from
+    # command output, so content_string cannot be trusted to show a trailing
+    # newline. Comparing it exactly here passes under the podman backend and
+    # fails under the ansible one, for a file that is byte-identical.
+    assert token.content_string.strip() == TOKEN
+
+    # So the property that actually matters is checked by byte count, which no
+    # backend can distort: exactly the token plus one newline. lego strips one
+    # "\n" and no other whitespace, so a second newline or a trailing space is
+    # sent to the API verbatim and comes back as a 401 that explains nothing.
+    size = int(host.run(f"wc -c < {CONFIG}/dns-api-token").stdout.strip())
+    assert size == len(TOKEN) + 1
 
 
 def test_the_token_appears_nowhere_else(host):
