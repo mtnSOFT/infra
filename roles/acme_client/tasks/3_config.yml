@@ -1,19 +1,12 @@
 ---
-# lego reads any of its INFOMANIAK_* settings from a <VAR>_FILE path, which is
-# why the token gets a file of its own instead of an Environment= line or an
-# EnvironmentFile=. Both of those would put it somewhere it does not belong: unit
-# files are world-readable and printed by `systemctl cat`, and an
-# EnvironmentFile= is loaded into the service's process environment, which the
-# reload commands inherit - handing a zone-rewriting credential to
-# `docker compose`, whose environment shows up in `docker inspect`. With _FILE
-# only the path is anywhere visible.
+# Own file, passed to lego as INFOMANIAK_ACCESS_TOKEN_FILE. Not Environment=
+# (unit files are world-readable, `systemctl cat` prints them) and not
+# EnvironmentFile= (loaded into the process env, inherited by the reload
+# commands, i.e. handed to docker compose).
 #
-# The trailing newline is deliberate and load-bearing: lego strips exactly one
-# "\n" and no other whitespace, so a value with a trailing space or a second
-# newline is sent to the API verbatim and comes back as a 401 that says nothing
-# about why. `| trim` plus one explicit "\n" is the only safe rendering; keep the
-# vault value a plain quoted scalar, since a YAML "> " block adds its own
-# newline on top.
+# The trailing newline is load-bearing: lego strips exactly one "\n" and no other
+# whitespace, so anything else is sent verbatim and returns an opaque 401. Keep
+# the vault value a plain quoted scalar - a YAML "> " block adds its own newline.
 - name: Render the acme_client DNS API token
   ansible.builtin.copy:
     content: "{{ acme_client_dns_api_token | trim }}\n"
@@ -23,9 +16,8 @@
     mode: "0600"
   no_log: true
 
-# Two generic scripts, rendered once, that take the zone as their first argument
-# and read everything else from that zone's .conf. The alternative - a script per
-# certificate - would mean N copies of the same logic drifting apart.
+# Generic: they take the zone as $1 and read the rest from its .conf. A script
+# per certificate would be N copies of the same logic.
 - name: Render the acme_client scripts
   ansible.builtin.template:
     src: "{{ item }}.j2"
@@ -37,10 +29,8 @@
     - acme-client-renew.sh
     - acme-client-deploy.sh
 
-# Template units, instantiated per zone as acme-client-renew@<zone>.timer. One
-# instance per certificate buys per-zone isolation (a zone whose DNS API is down
-# cannot hold up the others), a journal per zone, and an independently drawn
-# randomized delay.
+# Instantiated per zone. Buys per-zone isolation, a journal per zone, and an
+# independent randomized delay.
 - name: Render the acme_client systemd units
   ansible.builtin.template:
     src: "{{ item }}.j2"
@@ -52,8 +42,7 @@
     - acme-client-renew@.service
     - acme-client-renew@.timer
 
-# 0640 rather than 0600 only because it holds no secrets - just names, paths and
-# permissions. It lives in a 0700 directory regardless.
+# 0640: no secrets, just names, paths and modes. Sits in a 0700 dir anyway.
 - name: Render the acme_client certificate configs
   ansible.builtin.template:
     src: acme-client-cert.conf.j2
@@ -65,11 +54,8 @@
   loop_control:
     label: "{{ item.zone }}"
 
-# The reload commands go in a script of their own rather than into the .conf,
-# because they are arbitrary strings: embedding them in a sourced shell file
-# would mean quoting them correctly for a shell that has not parsed them yet. As
-# a script they are just lines, and the deploy step runs it only if it exists -
-# so a certificate with no consumers on this host needs no file at all.
+# Separate script, not a .conf value: the commands are arbitrary strings, so as
+# lines in a script they need no shell quoting. Deploy runs it only if present.
 - name: Render the acme_client reload scripts
   ansible.builtin.template:
     src: acme-client-reload.sh.j2
@@ -82,9 +68,8 @@
     label: "{{ item.zone }}"
   when: item.reload_commands | length > 0
 
-# Dropping the reload commands from an entry must actually stop the reloads,
-# which a `when:` on the task above cannot do on its own - the file from the last
-# converge would just stay there.
+# Dropping the commands must stop the reloads; a `when:` alone would leave the
+# previous file in place.
 - name: Remove obsolete acme_client reload scripts
   ansible.builtin.file:
     path: "{{ item.reload_script }}"
@@ -93,4 +78,3 @@
   loop_control:
     label: "{{ item.zone }}"
   when: item.reload_commands | length == 0
-

@@ -1,46 +1,29 @@
 ---
-# This runs after the timers are installed, deliberately: a certificate that
-# fails here is already covered by its own timer and will be retried tonight
-# without anyone coming back to re-run the playbook.
-#
-# Calling this on every converge is free. `lego renew` reads the certificate on
-# disk and returns without touching the network while more than renew_days of
-# validity are left, so the common case is a few milliseconds per zone. What it
-# buys is the first certificate landing on a fresh host immediately, instead of
-# up to a day later - long enough for a consumer role's certificate assertion to
-# fail on the very first run.
-#
-# --now suppresses lego's own pre-renewal sleep, which is up to eight minutes
-# whenever stdout is not a terminal. Ansible's command module gives it a pipe, so
-# without this an interactive converge that hits a real renewal looks hung and
-# gets interrupted. The systemd unit does not pass it: there, the jitter is
-# wanted.
+# Runs after the timers: a zone that fails here retries tonight on its own.
+# Free to call every converge - lego does not touch the network when not due -
+# and it puts the first certificate on a fresh host before a consumer role
+# asserts it exists.
+# --now drops lego's own sleep (up to 8 min when stdout is not a tty, which
+# Ansible's pipe is), so an interactive run does not look hung. systemd omits it.
 - name: Obtain or renew the acme_client certificates
   ansible.builtin.command:
     cmd: "/usr/local/bin/acme-client-renew.sh {{ item.zone }} --now"
   register: _acme_client_renew
-  # Both of these are constants on purpose. ansible-core no longer exposes a
-  # module's result fields (stdout, rc) to changed_when/failed_when, so the two
-  # questions this task used to answer inline - did anything change, did anything
-  # fail - are answered by the two tasks below, which read the registered
-  # results and can therefore see stdout.
-  #
-  # Not failing here also means bringing up three zones at once reports all three
-  # failures in one run rather than stopping at the first.
+  # Both constant: ansible-core no longer exposes result fields (stdout, rc) to
+  # changed_when/failed_when, so the two tasks below answer those questions from
+  # the registered results. Not failing here also reports every broken zone in
+  # one run instead of stopping at the first.
   changed_when: false
   failed_when: false
-  # The output of this task *is* the story when something goes wrong, and there
-  # is nothing secret in it - lego reads the API token from a file, so it never
-  # appears in the command line or the environment.
+  # This output is the story when something breaks, and holds nothing secret -
+  # lego reads the token from a file.
   no_log: false
   loop: "{{ _acme_client_certs }}"
   loop_control:
     label: "{{ item.zone }}"
   when: acme_client_issue | bool
 
-# Reports "changed" for exactly the zones whose deploy actually replaced a pair,
-# and nothing at all when every certificate was already current - which is the
-# common case, since a not-due renewal does not touch the network or the disk.
+# changed for exactly the zones that replaced a pair; silent when all current.
 - name: Report the acme_client certificates that were deployed
   ansible.builtin.debug:
     msg: "{{ item.item.zone }}: {{ item.stdout }}"
@@ -74,9 +57,7 @@
   no_log: false
   when: acme_client_issue | bool
 
-# Verifying the deploy step landed, at the point the certificate is produced.
-# Without this the first thing to notice a missing or unreadable key is the
-# consumer role several plays later, or the container crash-looping after it.
+# Verify the deploy landed here, not three roles later in a consumer.
 - name: Stat the deployed acme_client certificates
   ansible.builtin.stat:
     path: "{{ item.cert_file }}"
@@ -101,9 +82,8 @@
   ansible.builtin.assert:
     that:
       - item.stat.exists
-      # isreg, not just exists: consumer roles stat these paths and require a
-      # regular file, so a symlink here would break them. Nothing in this role
-      # creates one, and this is what keeps that true.
+      # isreg: consumer roles stat these paths and require a regular file, so a
+      # symlink would break them.
       - item.stat.isreg
     fail_msg: >-
       {{ item.item.cert_file }} is missing or is not a regular file after a
@@ -116,10 +96,8 @@
     label: "{{ item.item.zone }}"
   when: acme_client_issue | bool
 
-# The group and mode are checked, not just existence: this is the pair that
-# decides whether a consumer can actually read the key, and getting it wrong
-# produces a container that crash-loops with an error about the file rather than
-# about its permissions.
+# Group and mode, not just existence: this is what decides whether a consumer can
+# read the key at all.
 - name: Assert the deployed acme_client private keys are readable by their consumers
   ansible.builtin.assert:
     that:

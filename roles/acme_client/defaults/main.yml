@@ -1,74 +1,36 @@
 ---
-# The certificates this host issues and renews, as a list of dicts. Only `zone`
-# is required; see the role README for every per-entry key. A certificate is made
-# available on several hosts by listing it for all of them - each one issues and
-# renews its own copy, so no host can be stale relative to another.
-#
-# An empty list is a configuration error rather than a no-op: applying this role
-# means a certificate was wanted, and silently installing an API token with no
-# timers is the kind of success that is discovered three months later. 1_prep
-# fails on it.
+# Certificates this host issues. Only `zone` is required; see README.
+# Empty = configuration error, not a no-op. 1_prep fails on it.
 acme_client_certificates: []
 
-# Contact address the ACME account registers with. lego names the account
-# directory after it, so changing this later means a new account and a new
-# registration - it is not just metadata.
+# Account contact. Names lego's account dir - changing it means a new account.
 acme_client_email: ""
 
-# ACME directory URL, overridable per certificate. Point an entry at the staging
-# endpoint while working out its DNS-01 setup:
-#   https://acme-staging-v02.api.letsencrypt.org/directory
-# The duplicate-certificate limit (5 per identical name set per 7 days, with no
-# renewal exemption) is the one that bites while debugging, and lego state is
-# kept per CA host, so flipping an entry to staging and back cannot destroy the
-# production certificate.
+# ACME directory. Overridable per certificate; point an entry at staging while
+# debugging, since duplicates are limited to 5 per name set per 7 days.
 acme_client_server: "https://acme-v02.api.letsencrypt.org/directory"
 
-# lego's --dns provider name. Only "infomaniak" is wired up here, since the
-# credential below is provider specific; the variable exists so the choice is
-# visible in inventory rather than buried in a template.
 acme_client_dns_provider: "infomaniak"
 
-# DNS provider API token, needing dns:read + dns:write. Vault only. It lands in
-# acme_client_token_file 0600 root:root and reaches lego as
-# INFOMANIAK_ACCESS_TOKEN_FILE, so it never enters any process environment.
-#
-# Note the token is account-wide - Infomaniak has no per-zone scoping - so every
-# host that declares a certificate can rewrite every zone in the account.
+# Needs dns:read + dns:write. Vault only. Account-wide: no per-zone scoping,
+# so every host declaring a certificate can rewrite every zone.
 acme_client_dns_api_token: ""
 
-# Key algorithm for the certificate. ec256 is smaller and faster than RSA and is
-# accepted everywhere that matters here; use rsa2048 only for a consumer that
-# genuinely cannot do ECDSA.
 acme_client_key_type: "ec256"
 
-# Renew below this many days of remaining validity, overridable per certificate.
-# lego exits without touching the network above the threshold, which is what
-# makes both a daily timer and an every-converge check free. Let's Encrypt issues
-# for 90 days, so 30 leaves four weeks of headroom for failures.
-#
-# This is also the knob that staggers a zone living on five or more hosts: they
-# all issue on the same day at bring-up, so they share an expiry and would then
-# cross the same threshold on the same day forever, sitting permanently at the
-# 5-per-7-days limit. Give such hosts 30, 34, 38, 42 ... so each renews in a
-# different week.
+# Renew below this many days left; overridable per certificate. lego does not
+# touch the network above it, so a daily timer is free.
+# Also the stagger knob: hosts sharing a zone issue together, so they share an
+# expiry and renew together forever. Past 4 hosts, vary this (30, 34, 38 ...).
 acme_client_renew_days: 30
 
-# Parent directory for the deployed certificates: each entry lands in
-# <parent>/<zone>/{fullchain,privkey}.pem unless it sets `deploy_dir` itself.
-# This default is exactly where gitea_tls_cert_file / vaultwarden_tls_cert_file
-# already point, which is why no consumer role or its inventory needs changing.
+# Certificates land in <parent>/<zone>/ - where gitea_tls_cert_file and
+# vaultwarden_tls_cert_file already point.
 acme_client_deploy_dir_parent: "/etc/ssl"
 
-# Per-certificate fallbacks for the deployed file ownership and modes. Any
-# certificate entry overrides any of these.
-#
-# The certificate is public material; the private key is not. 0640 root:root
-# means only root reads the key - right for a container that runs as root
-# (vaultwarden), and wrong for gitea, whose container reads the mounted key as
-# uid/gid 1000 and crash-loops on a key it cannot open. A zone consumed by gitea
-# needs `key_group: "1000"` on its entry. One key file has to satisfy every
-# consumer of that zone on that host, so pick the group they share.
+# Per-certificate fallbacks. 0640 root:root fits a root container and
+# crash-loops gitea, which reads the key as uid/gid 1000 - such a zone needs
+# key_group: "1000".
 acme_client_default_cert_owner: "root"
 acme_client_default_cert_group: "root"
 acme_client_default_cert_mode: "0644"
@@ -76,91 +38,55 @@ acme_client_default_key_owner: "root"
 acme_client_default_key_group: "root"
 acme_client_default_key_mode: "0640"
 
-# Non-secret provider tuning, rendered as Environment= lines in the unit.
-# Never put the token here: unit files are world-readable and `systemctl cat`
-# prints them, so 1_prep asserts that no key in this dict ends in TOKEN.
+# Non-secret tuning only - becomes Environment= in a world-readable unit.
+# 1_prep asserts no key here looks like a token.
 acme_client_provider_env:
   INFOMANIAK_TTL: "300"
   INFOMANIAK_POLLING_INTERVAL: "10"
   INFOMANIAK_PROPAGATION_TIMEOUT: "120"
   INFOMANIAK_HTTP_TIMEOUT: "30"
 
-# THE SPLIT-HORIZON KNOB, and the one default here that is load-bearing rather
-# than a preference.
-#
-# lego finds the challenge zone's apex and its authoritative nameservers with
-# these resolvers, then polls those nameservers directly for the TXT record.
-# This host resolves through the internal DNS, which is authoritative for the
-# internal zones and will never see a record that lives in the public zone at
-# the provider. Left at the system resolver, the SOA walk stops at the internal
-# zone, the NS come back as the internal server, and lego polls it for a record
-# that only exists at the provider - an authoritative NODATA, until
-# INFOMANIAK_PROPAGATION_TIMEOUT expires. No certificate is ever issued and the
-# error reads like a provider fault.
-#
-# Public resolvers fix the apex lookup and the NS lookup in one move. Do not
-# reach for lego's --dns.propagation-disable-ans instead: it silences the check
-# rather than fixing it, and then hides genuine propagation failures too.
+# Split-horizon knob. Must stay public resolvers: the internal DNS is
+# authoritative for these zones and never sees the challenge TXT, which lives in
+# the public zone. Left at the system resolver lego polls the internal server,
+# gets NODATA, times out - no certificate, error looks like a provider fault.
+# Not --dns.propagation-disable-ans: that hides real failures.
 acme_client_dns_resolvers:
   - "1.1.1.1:53"
   - "8.8.8.8:53"
 
-# lego's own data: the ACME account key, the certificates and their metadata.
-# One subdirectory per CA host, so an entry pointed at staging cannot overwrite
-# the certificate a production entry issued - flip it back and the good one is
-# still there.
+# lego's account key, certificates and metadata. One subdir per CA host, so
+# staging cannot overwrite a production certificate.
 acme_client_state_dir: "/var/lib/acme_client"
 
-# Role configuration on the host: the API token, one .conf per certificate, and
-# one reload script per certificate that has reload commands.
 acme_client_config_dir: "/etc/acme-client"
 acme_client_token_file: "{{ acme_client_config_dir }}/dns-api-token"
 
-# Pinned lego release and the SHA-256 of its linux tarball for `arch`. lego is a
-# single static Go binary and is not packaged in Ubuntu, so it comes from GitHub
-# releases - pinned and checksummed, because this binary is handed a DNS API
-# token that can rewrite every zone in the account.
-#
-# Bump both together. The checksums are published as lego_<version>_checksums.txt
-# - note no leading "v" on that file, unlike the tarballs themselves.
+# Not packaged in Ubuntu, so pinned + checksummed from GitHub releases - this
+# binary is handed the DNS API token. Bump both together.
+# Checksums file drops the "v" (lego_<version>_checksums.txt), tarballs keep it.
 acme_client_lego_version: "5.3.1"
 acme_client_lego_checksum: "b3c71b122ee1947eacfe0b809b955647f6377239fe4bfc49f73b1a091ae1252a"
 
-# Versioned install directory, so `creates:` on the unarchive is version-aware
-# and bumping the version above actually upgrades. Old versions are left behind
-# on purpose - one of them is the running binary, and reverting the two variables
-# above rolls back instantly.
+# Versioned dir so `creates:` is version-aware and a bump actually upgrades.
+# Old versions kept: one is the running binary, and reverting rolls back.
 acme_client_lego_install_dir: "/usr/local/lib/lego"
 acme_client_cache_dir: "/var/cache/acme-client"
 
-# Run the obtain/renew wrapper during a converge. A not-due renewal costs
-# nothing, and this is what puts the first certificate on a fresh host instead of
-# waiting up to a day for the timer - which would make a consumer role's
-# certificate assertion fail on first run. Set false to render configuration
-# only, which is what the molecule scenario does.
+# Obtain during the converge. Free when not due, and puts the first certificate
+# on a fresh host before a consumer role asserts it exists.
 acme_client_issue: true
 
-# Install and enable the per-certificate timers. Set false where there is no
-# systemd to talk to, such as the molecule container. Note that false does not
-# disable timers that are already enabled; only removing the entry from
-# acme_client_certificates does that.
+# false where there is no systemd (molecule). Does not disable already-enabled
+# timers - only removing the entry does that.
 acme_client_enable_timers: true
 
-# Daily, off the hour, then jittered. lego exits without any network traffic
-# while more than `renew_days` of validity are left, so a daily tick costs
-# nothing and gives roughly that many attempts before anything expires - a week
-# of failures is survivable. Let's Encrypt asks clients not to converge on round
-# times, hence both the odd minute and the randomized delay.
-#
-# With several certificates the shared base time is fine: each template instance
-# draws its own delay, which decorrelates them without computing a per-zone
-# offset.
+# Daily, off the hour, jittered. ~30 attempts before anything expires.
+# Each instance draws its own delay, so zones and hosts do not collide.
 acme_client_renew_oncalendar: "*-*-* 03:17:00"
 acme_client_renew_randomized_delay: "3h"
 
-# Type=oneshot has NO start timeout by default, which is what makes lego's own
-# pre-renewal sleep safe - but it also means a renewal wedged on the DNS API
-# would leave the unit "activating" forever. systemd skips a timer trigger whose
-# unit is still running, so that certificate's renewals would stop for good,
-# quietly. Bound it.
+# Type=oneshot has no default timeout. A hang would leave the unit activating
+# forever, and systemd skips a timer whose unit still runs - renewals would stop
+# silently.
 acme_client_renew_timeout: "30min"

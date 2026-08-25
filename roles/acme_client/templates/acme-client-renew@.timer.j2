@@ -1,23 +1,18 @@
 # Ansible managed - DO NOT EDIT MANUALLY
 #
-# One instance per certificate: acme-client-renew@<zone>.timer. Each draws its
-# own randomized delay, so several certificates on one host - and the same zone
-# on several hosts - do not all call the API at the same moment.
+# One instance per certificate. Each draws its own delay, so several
+# certificates - and the same zone on several hosts - do not call the API at once.
 [Unit]
 Description=Daily check of the %i certificate
 
 [Timer]
-# lego exits without any network traffic while the certificate still has more
-# than its configured renewal threshold of validity left, so a daily tick costs
-# nothing and gives roughly a month of attempts before anything can expire - a
-# week of failures is survivable. Twice a day would be certbot habit, not a
-# reason. Let's Encrypt asks clients not to converge on round times, hence both
-# the odd minute and the delay below.
+# Daily costs nothing (lego skips the network when not due) and gives ~30
+# attempts before expiry. Odd minute + delay because CAs ask clients not to
+# converge on round times.
 OnCalendar={{ acme_client_renew_oncalendar }}
 RandomizedDelaySec={{ acme_client_renew_randomized_delay }}
 
-# A host that was powered off, or rebooting, when the timer came due runs the
-# missed check shortly after boot instead of skipping the day.
+# Catch up after boot instead of skipping the day.
 Persistent=true
 
 Unit=acme-client-renew@%i.service

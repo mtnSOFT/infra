@@ -1,11 +1,8 @@
 # Ansible managed - DO NOT EDIT MANUALLY
 #
-# Settings for one certificate, sourced by acme-client-renew.sh and
-# acme-client-deploy.sh. Values are single-quoted and the role validates that
-# zones and domains are plain DNS names, so nothing here can close the quote.
-#
-# DOMAINS is space separated and word-split on purpose when it becomes lego's -d
-# arguments; that is safe for the same reason.
+# One certificate, sourced by acme-client-renew.sh and acme-client-deploy.sh.
+# Values are single-quoted; the role validates zones and domains as plain DNS
+# names, so nothing can close the quote and $DOMAINS is safe to word-split.
 
 ZONE='{{ item.zone }}'
 DOMAINS='{{ item.domains | join(" ") }}'
@@ -15,16 +12,14 @@ KEY_TYPE='{{ item.key_type }}'
 RENEW_DAYS='{{ item.renew_days }}'
 DNS_PROVIDER='{{ acme_client_dns_provider }}'
 
-# See the acme_client_dns_resolvers comment in the role defaults: this is what
-# stops the DNS-01 pre-check from asking the internal DNS about a record that
-# only exists in the public zone.
+# Must be public resolvers - see acme_client_dns_resolvers in the role defaults.
 DNS_RESOLVERS='{{ acme_client_dns_resolvers | join(" ") }}'
 
 LEGO_BIN='{{ _acme_client_lego_bin }}'
 LEGO_DIR='{{ item.lego_dir }}'
 
-# What lego writes. The name comes from the first domain with "*" replaced by
-# "_", and the .crt is already the full chain.
+# What lego writes: named after the first domain, "*" -> "_". The .crt is already
+# the full chain.
 SRC_CERT='{{ item.src_cert }}'
 SRC_KEY='{{ item.src_key }}'
 

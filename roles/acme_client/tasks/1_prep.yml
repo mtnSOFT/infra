@@ -1,14 +1,10 @@
 ---
-# Everything here fails before a single byte is written, because most of the
-# failure modes this role has are configuration mistakes whose symptom appears
-# somewhere else entirely: a wrong resolver looks like a provider outage, a
-# reordered domain list looks like a working renewal that quietly issues a new
-# certificate every time, and a key the container cannot read looks like the
-# container being broken.
+# Fail before writing anything: most mistakes here surface somewhere else - a
+# wrong resolver looks like a provider outage, an unreadable key like a broken
+# container.
 #
-# ansible.cfg turns no_log on for every task, which would censor the messages
-# that make these failures actionable, so each assert sets no_log: false. That is
-# safe even for the token check: assert reports the *expression*, not the value.
+# ansible.cfg sets no_log globally, which would censor these messages, hence
+# no_log: false on every assert. Safe: assert reports the expression, not values.
 - name: Validate the acme_client role inputs
   ansible.builtin.assert:
     that:
@@ -24,8 +20,7 @@
       which looks like success until something expires.
   no_log: false
 
-# Called out on its own because it is the one input whose default must not be
-# emptied, and because the explanation is the whole reason the role works here.
+# Separate because this default must not be emptied.
 - name: Validate the acme_client DNS resolvers
   ansible.builtin.assert:
     that:
@@ -40,9 +35,7 @@
       error that reads like a provider fault. Point these at public resolvers.
   no_log: false
 
-# Unit files are world-readable and `systemctl cat` prints them, so the token
-# gets its own 0600 file and reaches lego as INFOMANIAK_ACCESS_TOKEN_FILE. This
-# stops someone from "simplifying" that by putting it back in the env dict.
+# The token has its own 0600 file; unit files are world-readable.
 - name: Assert no credential is set in acme_client_provider_env
   ansible.builtin.assert:
     that:
@@ -55,11 +48,8 @@
       {{ acme_client_provider_env.keys() | select('search', '(?i)token') | list }}.
   no_log: false
 
-# Checked across the whole list before the per-entry loop below, because that
-# loop labels itself with item.zone and would fail to render its own label on an
-# entry that has no zone. Uniqueness matters because the zone names the deploy
-# directory and the systemd instance: two entries sharing one would give two
-# timers fighting over one pair of files.
+# Before the per-entry loop, which labels itself with item.zone. Uniqueness
+# matters: the zone names the deploy dir and the systemd instance.
 - name: Validate the acme_client certificate list structure
   ansible.builtin.assert:
     that:
@@ -72,21 +62,12 @@
       {{ acme_client_certificates | map(attribute='zone', default='<missing>') | list }}.
   no_log: false
 
-# The zone regex is doing double duty. Besides rejecting nonsense, it guarantees
-# the zone is safe as a systemd instance name and as a single path component, so
-# nothing here needs systemd-escape and no entry can traverse out of the config
-# directory. The domain regex does the same for the .conf file, whose values are
-# single-quoted shell - a domain that cannot contain a quote or a space cannot
-# break out of it, which is what lets the renew script word-split $DOMAINS.
+# Both regexes are also injection guards: the .conf holds single-quoted shell,
+# and the zone is used as a systemd instance name and a path component.
 #
-# Note what is deliberately NOT enforced: the number or position of wildcards.
-# Several wildcard SANs in one certificate are legitimate (*.lab.example.com and
-# *.dev.lab.example.com), so a rule about them would reject valid configuration.
-# The real hazard is ordering - lego names the files it writes after the FIRST
-# domain, so inserting a new name at the top renames the certificate on disk and
-# the next run issues a fresh one instead of renewing - but that applies to any
-# reorder, wildcard or not, and cannot be checked from a single run. It is a
-# README gotcha, not an assertion.
+# Not enforced: wildcard count or position. Several wildcard SANs are legitimate.
+# The real hazard is reordering - lego names files after the first domain - but
+# that applies to any reorder and cannot be checked from one run. README gotcha.
 - name: Validate each acme_client certificate entry
   ansible.builtin.assert:
     that:
@@ -112,14 +93,8 @@
   loop_control:
     label: "{{ item.zone }}"
 
-# One normalised list, built once, so the defaults resolve in exactly one place.
-# Every task and template downstream reads these keys instead of repeating
-# `| default(...)` chains, which is what keeps the .conf file, the directory
-# creation and the post-issue assertions from being able to disagree about where
-# a file is or who owns it.
-#
-# The `vars:` block computes the intermediate values the entry needs twice
-# (the domain list feeds both `domains` and the basename derived from it).
+# Defaults resolve once, here. Everything downstream reads these keys, so the
+# .conf, the directories and the post-issue asserts cannot disagree.
 - name: Resolve the acme_client certificate list
   ansible.builtin.set_fact:
     _acme_client_certs: "{{ _acme_client_certs | default([]) + [_entry] }}"
@@ -127,7 +102,7 @@
     _domains: "{{ item.domains | default(['*.' ~ item.zone, item.zone]) }}"
     _server: "{{ item.server | default(acme_client_server) }}"
     _lego_dir: "{{ acme_client_state_dir }}/{{ _server | urlsplit('hostname') }}"
-    # lego replaces "*" with "_" in the filename it derives from the first domain.
+    # lego derives the filename from the first domain, "*" -> "_".
     _basename: "{{ _domains[0] | replace('*', '_') }}"
     _deploy_dir: "{{ item.deploy_dir | default(acme_client_deploy_dir_parent ~ '/' ~ item.zone) }}"
     _entry:
@@ -155,19 +130,16 @@
   loop_control:
     label: "{{ item.zone }}"
 
-# The binary lives under a versioned directory so that `creates:` on the
-# unarchive is version-aware and bumping acme_client_lego_version actually
-# upgrades. The units reference this path rather than the /usr/local/bin symlink,
-# so `systemctl cat` names the exact binary that will run.
+# Units use the versioned path, not the symlink, so `systemctl cat` names the
+# exact binary.
 - name: Resolve the acme_client lego paths
   ansible.builtin.set_fact:
     _acme_client_lego_tarball: "lego_v{{ acme_client_lego_version }}_linux_{{ arch }}.tar.gz"
     _acme_client_lego_bin: "{{ acme_client_lego_install_dir }}/{{ acme_client_lego_version }}/lego"
     _acme_client_lego_release: "https://github.com/go-acme/lego/releases/download/v{{ acme_client_lego_version }}"
 
-# 0700 on everything the role owns: the config directory holds the API token, and
-# the state directory holds the ACME account key and every private key lego has
-# issued. The install directory is 0755 because it holds only a public binary.
+# 0700 throughout: the config dir holds the token, the state dir the account key
+# and every private key. Install dir is 0755 - public binary.
 - name: Create the acme_client directory tree
   ansible.builtin.file:
     path: "{{ item.path }}"
@@ -191,9 +163,8 @@
   loop_control:
     label: "{{ item.path }}"
 
-# One per CA host rather than one per certificate, hence the unique: certificates
-# issued by the same CA share a lego state directory, including the ACME account
-# key. lego creates certificates/ and accounts/ underneath on its own.
+# One per CA host, hence unique - certificates from the same CA share an account
+# key. lego creates certificates/ and accounts/ itself.
 - name: Create the acme_client lego state directories
   ansible.builtin.file:
     path: "{{ item }}"
@@ -203,11 +174,8 @@
     mode: "0700"
   loop: "{{ _acme_client_certs | map(attribute='lego_dir') | unique | list }}"
 
-# Deliberately 0755, not 0700: the private key's own 0640 is what protects it,
-# and the directory has to stay traversable for everything else that reads the
-# certificate - the docker daemon setting up a bind mount, an `openssl x509` by
-# hand, a future non-container consumer. A consumer role that stats the file,
-# like gitea, only looks at the file's own bits.
+# 0755, not 0700: the key's own 0640 is the protection, and the dir must stay
+# traversable for the docker daemon and anything else reading the certificate.
 - name: Create the acme_client deploy directories
   ansible.builtin.file:
     path: "{{ item }}"
@@ -217,14 +185,10 @@
     mode: "0755"
   loop: "{{ _acme_client_certs | map(attribute='deploy_dir') | unique | list }}"
 
-# Retiring a certificate means removing its entry from acme_client_certificates,
-# so the role has to notice the configs it did not just write. Without this, a
-# removed zone keeps its enabled timer and its config and goes on renewing
-# forever - the quietest possible way to keep consuming a rate limit.
-#
-# Discovered here rather than in 3_config.yml so that it is available on a subset
-# run too: 4_service.yml acts on it, and `--skip-tags config` would otherwise
-# leave it undefined. The acting happens there, after the timer is stopped.
+# Retiring a certificate = removing its entry, so the role must notice configs
+# it did not write - otherwise a removed zone renews forever.
+# Discovered here, not in 3_config, so `--skip-tags config` still defines it.
+# 4_service acts on it, after stopping the timer.
 - name: Find the acme_client certificate configs on the host
   ansible.builtin.find:
     paths: "{{ acme_client_config_dir }}/certs"

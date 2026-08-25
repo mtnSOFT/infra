@@ -1,18 +1,14 @@
 ---
-# lego verifies TLS to both the ACME directory and the DNS API, so it needs the
-# system trust store. Present on any normal host, but the molecule container and
-# a minimal cloud image are not normal hosts.
+# lego verifies TLS to both the ACME directory and the DNS API.
 - name: Install the acme_client packages
   ansible.builtin.apt:
     name:
       - ca-certificates
     state: present
 
-# Fetched to a cache directory rather than a temporary path on purpose: get_url
-# checksums an existing dest *first* and skips the download when it matches, so
-# a converge re-verifies ~70 MB of local file instead of re-fetching it. The
-# checksum is not optional here - this binary is handed a DNS API token that can
-# rewrite every zone in the account.
+# Cached, not fetched to a temp path: get_url checksums an existing dest first
+# and skips the download, so a converge re-verifies ~70 MB instead of re-pulling.
+# Checksum is not optional - this binary gets the DNS API token.
 - name: Download the pinned lego release
   ansible.builtin.get_url:
     url: "{{ _acme_client_lego_release }}/{{ _acme_client_lego_tarball }}"
@@ -22,10 +18,8 @@
     group: root
     mode: "0644"
 
-# The tarball is flat (CHANGELOG.md, LICENSE, lego), so only the binary is
-# extracted. `creates:` points at the versioned path, which is what makes this
-# both idempotent and able to upgrade: the same guard on a fixed
-# /usr/local/bin/lego would never notice a version bump.
+# Flat tarball, so only the binary. `creates:` on the versioned path is what
+# makes this both idempotent and able to upgrade.
 - name: Extract the lego binary
   ansible.builtin.unarchive:
     src: "{{ acme_client_cache_dir }}/{{ _acme_client_lego_tarball }}"
@@ -35,8 +29,7 @@
     remote_src: true
     creates: "{{ _acme_client_lego_bin }}"
 
-# unarchive's mode: applies to the destination directory, not to the members it
-# extracts, so the binary's permissions are set separately.
+# unarchive's mode: applies to the dest dir, not the members.
 - name: Set the lego binary permissions
   ansible.builtin.file:
     path: "{{ _acme_client_lego_bin }}"
@@ -45,9 +38,7 @@
     group: root
     mode: "0755"
 
-# Purely a convenience for debugging by hand. Nothing in this role calls lego
-# through it - the units and scripts use the versioned path, so `systemctl cat`
-# always names the exact binary that runs.
+# Convenience only - nothing here calls lego through it.
 - name: Link lego into the default path
   ansible.builtin.file:
     path: /usr/local/bin/lego

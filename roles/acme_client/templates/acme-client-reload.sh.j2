@@ -1,19 +1,16 @@
 #!/bin/sh
 # Ansible managed - DO NOT EDIT MANUALLY
 #
-# Tell the consumers of {{ item.zone }} that its certificate changed. Run by
-# acme-client-deploy.sh, and only after the new pair is actually in place.
+# Tell the consumers of {{ item.zone }} that the certificate changed. Run by
+# acme-client-deploy.sh, only after the new pair is in place.
 #
-# This is not an optimisation step. Every consumer reads its certificate once at
-# startup, and Docker bind-mounts a single file by inode - a running container
-# keeps reading the file it was started with regardless of what replaced the
-# path. Without these commands a renewal is invisible until something restarts
-# for an unrelated reason, which is usually after the old certificate expired.
+# Not an optimisation: consumers read the certificate once at startup, and Docker
+# bind-mounts a file by inode, so without this a renewal is invisible until
+# something restarts for another reason - usually after expiry.
 #
-# No `set -e`: every command is attempted even if an earlier one fails, so one
-# broken consumer cannot hide the state of the rest. The exit status is
-# non-zero if any of them failed, which fails the unit - after the files are
-# already deployed, which is the right order.
+# No `set -e`: every command is attempted so one broken consumer cannot hide the
+# rest. Non-zero exit if any failed, which fails the unit after the files are
+# already deployed - the right order.
 set -u
 
 rc=0
