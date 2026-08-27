@@ -19,19 +19,31 @@
 # next tick instead of skipped for three months as "fresh".
 set -eu
 
+# Same for every zone, so templated here rather than into each .conf.
+EMAIL='{{ acme_client_email }}'
+SERVER='{{ acme_client_server }}'
+LEGO_BIN='/usr/local/lib/lego/{{ acme_client_lego_version }}/lego'
+# Per CA host, so flipping SERVER to staging cannot clobber a production cert.
+LEGO_DIR='/var/lib/acme_client/{{ acme_client_server | urlsplit("hostname") }}'
+# Must be public resolvers - see acme_client_dns_resolvers in the role defaults.
+RESOLVERS='{{ acme_client_dns_resolvers | join(" ") }}'
+RENEW_DAYS=30
+
 ZONE="${1:-}"
 if [ -z "$ZONE" ]; then
   echo "usage: $0 <zone> [--now]" >&2
   exit 2
 fi
 
-CONF="{{ acme_client_config_dir }}/certs/${ZONE}.conf"
+CONF="/etc/acme-client/certs/${ZONE}.conf"
 if [ ! -f "$CONF" ]; then
   echo "acme-client: no configuration for '$ZONE' at $CONF" >&2
   exit 2
 fi
 # shellcheck source=/dev/null
 . "$CONF"
+
+SRC_CERT="${LEGO_DIR}/certificates/${CERT_BASE}.crt"
 
 no_sleep=""
 if [ "${2:-}" = "--now" ]; then
@@ -44,12 +56,12 @@ set -- --accept-tos \
   --email "$EMAIL" \
   --server "$SERVER" \
   --path "$LEGO_DIR" \
-  --dns "$DNS_PROVIDER" \
-  --key-type "$KEY_TYPE"
+  --dns infomaniak \
+  --key-type ec256
 
 # Word splitting intended: validated as plain host:port and DNS names.
 # shellcheck disable=SC2086
-for resolver in $DNS_RESOLVERS; do
+for resolver in $RESOLVERS; do
   set -- "$@" --dns.resolvers "$resolver"
 done
 

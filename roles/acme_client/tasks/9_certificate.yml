@@ -18,7 +18,7 @@
   # This output is the story when something breaks, and holds nothing secret -
   # lego reads the token from a file.
   no_log: false
-  loop: "{{ _acme_client_certs }}"
+  loop: "{{ acme_client_certificates }}"
   loop_control:
     label: "{{ item.zone }}"
   when: acme_client_issue | bool
@@ -55,67 +55,4 @@
       {{ _acme_client_renew.results | rejectattr('rc', 'equalto', 0)
          | map(attribute='stderr') | list }}
   no_log: false
-  when: acme_client_issue | bool
-
-# Verify the deploy landed here, not three roles later in a consumer.
-- name: Stat the deployed acme_client certificates
-  ansible.builtin.stat:
-    path: "{{ item.cert_file }}"
-    get_checksum: false
-  register: _acme_client_cert_stat
-  loop: "{{ _acme_client_certs }}"
-  loop_control:
-    label: "{{ item.zone }}"
-  when: acme_client_issue | bool
-
-- name: Stat the deployed acme_client private keys
-  ansible.builtin.stat:
-    path: "{{ item.key_file }}"
-    get_checksum: false
-  register: _acme_client_key_stat
-  loop: "{{ _acme_client_certs }}"
-  loop_control:
-    label: "{{ item.zone }}"
-  when: acme_client_issue | bool
-
-- name: Assert the deployed acme_client certificates are in place
-  ansible.builtin.assert:
-    that:
-      - item.stat.exists
-      # isreg: consumer roles stat these paths and require a regular file, so a
-      # symlink would break them.
-      - item.stat.isreg
-    fail_msg: >-
-      {{ item.item.cert_file }} is missing or is not a regular file after a
-      successful lego run for {{ item.item.zone }}. Check
-      /usr/local/bin/acme-client-deploy.sh and the source path
-      {{ item.item.src_cert }}.
-  no_log: false
-  loop: "{{ _acme_client_cert_stat.results | default([]) }}"
-  loop_control:
-    label: "{{ item.item.zone }}"
-  when: acme_client_issue | bool
-
-# Group and mode, not just existence: this is what decides whether a consumer can
-# read the key at all.
-- name: Assert the deployed acme_client private keys are readable by their consumers
-  ansible.builtin.assert:
-    that:
-      - item.stat.exists
-      - item.stat.isreg
-      - item.stat.mode == item.item.key_mode
-      - >-
-        item.stat.gr_name == item.item.key_group
-        or (item.stat.gid | string) == (item.item.key_group | string)
-    fail_msg: >-
-      {{ item.item.key_file }} should be mode {{ item.item.key_mode }} and group
-      {{ item.item.key_group }}, but is mode
-      {{ item.stat.mode | default('<missing>') }} and group
-      {{ item.stat.gr_name | default('<missing>') }}. A consumer that reads the
-      mounted key as a non-root user - gitea reads it as uid/gid 1000 - cannot
-      open it and will crash-loop.
-  no_log: false
-  loop: "{{ _acme_client_key_stat.results | default([]) }}"
-  loop_control:
-    label: "{{ item.item.zone }}"
   when: acme_client_issue | bool

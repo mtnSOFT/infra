@@ -10,14 +10,13 @@
 - name: Render the acme_client DNS API token
   ansible.builtin.copy:
     content: "{{ acme_client_dns_api_token | trim }}\n"
-    dest: "{{ acme_client_token_file }}"
+    dest: /etc/acme-client/dns-api-token
     owner: root
     group: root
     mode: "0600"
   no_log: true
 
-# Generic: they take the zone as $1 and read the rest from its .conf. A script
-# per certificate would be N copies of the same logic.
+# Generic: they take the zone as $1 and read what varies from its .conf.
 - name: Render the acme_client scripts
   ansible.builtin.template:
     src: "{{ item }}.j2"
@@ -42,39 +41,29 @@
     - acme-client-renew@.service
     - acme-client-renew@.timer
 
-# 0640: no secrets, just names, paths and modes. Sits in a 0700 dir anyway.
+# Only what differs between zones. Everything else is baked into the scripts.
+# 0640: no secrets here. Sits in a 0700 dir anyway.
 - name: Render the acme_client certificate configs
   ansible.builtin.template:
     src: acme-client-cert.conf.j2
-    dest: "{{ item.conf_file }}"
+    dest: "/etc/acme-client/certs/{{ item.zone }}.conf"
     owner: root
     group: root
     mode: "0640"
-  loop: "{{ _acme_client_certs }}"
+  loop: "{{ acme_client_certificates }}"
   loop_control:
     label: "{{ item.zone }}"
 
 # Separate script, not a .conf value: the commands are arbitrary strings, so as
-# lines in a script they need no shell quoting. Deploy runs it only if present.
+# lines in a script they need no shell quoting. Always rendered - an empty one
+# exits 0, which is simpler than a `when:` plus a task to remove the leftover.
 - name: Render the acme_client reload scripts
   ansible.builtin.template:
     src: acme-client-reload.sh.j2
-    dest: "{{ item.reload_script }}"
+    dest: "/etc/acme-client/reload.d/{{ item.zone }}.sh"
     owner: root
     group: root
     mode: "0700"
-  loop: "{{ _acme_client_certs }}"
+  loop: "{{ acme_client_certificates }}"
   loop_control:
     label: "{{ item.zone }}"
-  when: item.reload_commands | length > 0
-
-# Dropping the commands must stop the reloads; a `when:` alone would leave the
-# previous file in place.
-- name: Remove obsolete acme_client reload scripts
-  ansible.builtin.file:
-    path: "{{ item.reload_script }}"
-    state: absent
-  loop: "{{ _acme_client_certs }}"
-  loop_control:
-    label: "{{ item.zone }}"
-  when: item.reload_commands | length == 0

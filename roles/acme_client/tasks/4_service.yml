@@ -2,37 +2,16 @@
 # daemon_reload here rather than a handler: nothing installed is long-running, so
 # there is no service to restart.
 # started, not restarted - restarting a timer re-draws its randomized delay.
+#
+# Removing an entry from acme_client_certificates does NOT retire its timer; that
+# is a manual step, documented in the README.
 - name: Enable the acme_client renewal timers
   ansible.builtin.systemd:
     name: "acme-client-renew@{{ item.zone }}.timer"
     daemon_reload: true
     enabled: true
     state: started
-  loop: "{{ _acme_client_certs }}"
+  loop: "{{ acme_client_certificates }}"
   loop_control:
     label: "{{ item.zone }}"
   when: acme_client_enable_timers | bool
-
-# Stop before deleting: a timer left enabled with no .conf would fire and fail
-# nightly. failed_when: false - the unit may never have existed.
-- name: Stop the retired acme_client renewal timers
-  ansible.builtin.systemd:
-    name: "acme-client-renew@{{ item }}.timer"
-    enabled: false
-    state: stopped
-  loop: "{{ _acme_client_retired_zones }}"
-  register: _acme_client_retired_stop
-  failed_when: false
-  when: acme_client_enable_timers | bool
-
-# Config only. /etc/ssl/<zone>/ and lego's state are left alone: unmanaging a
-# certificate is not a request to destroy key material.
-- name: Remove the retired acme_client configuration
-  ansible.builtin.file:
-    path: "{{ item }}"
-    state: absent
-  loop: >-
-    {{ _acme_client_retired_zones
-       | map('regex_replace', '^(.*)$', acme_client_config_dir + '/certs/\1.conf') | list
-       + _acme_client_retired_zones
-       | map('regex_replace', '^(.*)$', acme_client_config_dir + '/reload.d/\1.sh') | list }}

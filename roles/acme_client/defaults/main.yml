@@ -1,50 +1,20 @@
 ---
-# Certificates this host issues. Only `zone` is required; see README.
+# Certificates this host issues. One entry per zone; only `zone` is required.
+# Optional per entry: domains, key_group, reload_commands. See README.
 # Empty = configuration error, not a no-op. 1_prep fails on it.
 acme_client_certificates: []
 
 # Account contact. Names lego's account dir - changing it means a new account.
 acme_client_email: ""
 
-# ACME directory. Overridable per certificate; point an entry at staging while
-# debugging, since duplicates are limited to 5 per name set per 7 days.
-acme_client_server: "https://acme-v02.api.letsencrypt.org/directory"
-
-acme_client_dns_provider: "infomaniak"
-
 # Needs dns:read + dns:write. Vault only. Account-wide: no per-zone scoping,
 # so every host declaring a certificate can rewrite every zone.
 acme_client_dns_api_token: ""
 
-acme_client_key_type: "ec256"
-
-# Renew below this many days left; overridable per certificate. lego does not
-# touch the network above it, so a daily timer is free.
-# Also the stagger knob: hosts sharing a zone issue together, so they share an
-# expiry and renew together forever. Past 4 hosts, vary this (30, 34, 38 ...).
-acme_client_renew_days: 30
-
-# Certificates land in <parent>/<zone>/ - where gitea_tls_cert_file and
-# vaultwarden_tls_cert_file already point.
-acme_client_deploy_dir_parent: "/etc/ssl"
-
-# Per-certificate fallbacks. 0640 root:root fits a root container and
-# crash-loops gitea, which reads the key as uid/gid 1000 - such a zone needs
-# key_group: "1000".
-acme_client_default_cert_owner: "root"
-acme_client_default_cert_group: "root"
-acme_client_default_cert_mode: "0644"
-acme_client_default_key_owner: "root"
-acme_client_default_key_group: "root"
-acme_client_default_key_mode: "0640"
-
-# Non-secret tuning only - becomes Environment= in a world-readable unit.
-# 1_prep asserts no key here looks like a token.
-acme_client_provider_env:
-  INFOMANIAK_TTL: "300"
-  INFOMANIAK_POLLING_INTERVAL: "10"
-  INFOMANIAK_PROPAGATION_TIMEOUT: "120"
-  INFOMANIAK_HTTP_TIMEOUT: "30"
+# ACME directory. Point at staging while debugging - duplicates are limited to
+# 5 per name set per 7 days. State lives per CA host, so flipping back and
+# forth cannot clobber a production certificate.
+acme_client_server: "https://acme-v02.api.letsencrypt.org/directory"
 
 # Split-horizon knob. Must stay public resolvers: the internal DNS is
 # authoritative for these zones and never sees the challenge TXT, which lives in
@@ -55,38 +25,15 @@ acme_client_dns_resolvers:
   - "1.1.1.1:53"
   - "8.8.8.8:53"
 
-# lego's account key, certificates and metadata. One subdir per CA host, so
-# staging cannot overwrite a production certificate.
-acme_client_state_dir: "/var/lib/acme_client"
-
-acme_client_config_dir: "/etc/acme-client"
-acme_client_token_file: "{{ acme_client_config_dir }}/dns-api-token"
-
 # Not packaged in Ubuntu, so pinned + checksummed from GitHub releases - this
 # binary is handed the DNS API token. Bump both together.
 # Checksums file drops the "v" (lego_<version>_checksums.txt), tarballs keep it.
 acme_client_lego_version: "5.3.1"
 acme_client_lego_checksum: "b3c71b122ee1947eacfe0b809b955647f6377239fe4bfc49f73b1a091ae1252a"
 
-# Versioned dir so `creates:` is version-aware and a bump actually upgrades.
-# Old versions kept: one is the running binary, and reverting rolls back.
-acme_client_lego_install_dir: "/usr/local/lib/lego"
-acme_client_cache_dir: "/var/cache/acme-client"
-
 # Obtain during the converge. Free when not due, and puts the first certificate
 # on a fresh host before a consumer role asserts it exists.
 acme_client_issue: true
 
-# false where there is no systemd (molecule). Does not disable already-enabled
-# timers - only removing the entry does that.
+# false where there is no systemd (molecule).
 acme_client_enable_timers: true
-
-# Daily, off the hour, jittered. ~30 attempts before anything expires.
-# Each instance draws its own delay, so zones and hosts do not collide.
-acme_client_renew_oncalendar: "*-*-* 03:17:00"
-acme_client_renew_randomized_delay: "3h"
-
-# Type=oneshot has no default timeout. A hang would leave the unit activating
-# forever, and systemd skips a timer whose unit still runs - renewals would stop
-# silently.
-acme_client_renew_timeout: "30min"

@@ -2,7 +2,8 @@
 # Ansible managed - DO NOT EDIT MANUALLY
 #
 # Tell the consumers of {{ item.zone }} that the certificate changed. Run by
-# acme-client-deploy.sh, only after the new pair is in place.
+# acme-client-deploy.sh, only after the new pair is in place. Always rendered -
+# with no reload_commands this is a no-op.
 #
 # Not an optimisation: consumers read the certificate once at startup, and Docker
 # bind-mounts a file by inode, so without this a renewal is invisible until
@@ -15,7 +16,7 @@ set -u
 
 rc=0
 
-{% for command in item.reload_commands %}
+{% for command in item.reload_commands | default([]) %}
 if ! {{ command }}; then
   echo "acme-client: reload failed for {{ item.zone }}: {{ command }}" >&2
   rc=1

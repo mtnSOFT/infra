@@ -12,15 +12,15 @@ Infomaniak DNS API, and deployed where the service roles already read them.
   renders a config file and a `acme-client-renew@<zone>` systemd service and
   timer, so every certificate is renewed independently of the others
 - Writes each result to `/etc/ssl/<zone>/fullchain.pem` and
-  `/etc/ssl/<zone>/privkey.pem`, with per-certificate ownership and modes — the
-  paths `gitea_tls_cert_file` and `vaultwarden_tls_cert_file` already point at,
-  so no consumer role or its inventory needs changing
+  `/etc/ssl/<zone>/privkey.pem` — the paths `gitea_tls_cert_file` and
+  `vaultwarden_tls_cert_file` already point at, so no consumer role or its
+  inventory needs changing
 - Runs the per-certificate `reload_commands` after, and only after, a pair is
   actually replaced
 - Obtains anything missing during the converge too, so a fresh host has its
   certificates before a consumer role asserts they exist
-- Retires a certificate when its entry is removed: the timer is disabled and the
-  config deleted, while the deployed files and lego's state are left alone
+
+It does *not* retire a certificate when its entry is removed — see the gotchas.
 
 The API token is never a shell argument, a unit-file value or an environment
 variable. It is rendered to a `0600` file and passed to lego as
@@ -82,13 +82,22 @@ variable. It is rendered to a `0600` file and passed to lego as
   disk. The next run then finds nothing to renew and issues a fresh certificate
   instead — one of the five per week. Several wildcards in one certificate are
   fine; the first one just has to stay first.
-- **A zone on five or more hosts sits permanently at the rate limit.** Hosts
-  sharing a zone all issue on the same day at bring-up, so they share an expiry
-  and then cross the renewal threshold together, forever — `RandomizedDelaySec`
-  only spreads them within a day. Keep a zone to four hosts or fewer, or stagger
-  `renew_days` per host (30, 34, 38, 42 …) so each renews in a different week.
-- **Modes must be quoted.** `key_mode: 0640` unquoted is read as octal by YAML
-  and arrives as `416`. The role asserts the format.
+- **Keep a zone to four hosts or fewer.** Hosts sharing a zone all issue on the
+  same day at bring-up, so they share an expiry and then cross the 30-day
+  renewal threshold together, forever — `RandomizedDelaySec` only spreads them
+  within a day. At five hosts that is 5 issuances in one week, exactly the
+  duplicate-certificate limit, and one retry blocks the whole group. If you ever
+  need more, reintroduce a per-entry `renew_days` and stagger it (30, 34, 38 …)
+  so each host renews in a different week.
+- **Retiring a zone is manual.** Removing its entry from
+  `acme_client_certificates` stops Ansible managing it but leaves the timer
+  enabled, renewing forever against the rate limit:
+  ```bash
+  systemctl disable --now acme-client-renew@<zone>.timer
+  rm /etc/acme-client/certs/<zone>.conf /etc/acme-client/reload.d/<zone>.sh
+  ```
+  The deployed files in `/etc/ssl/<zone>/` and lego's state are left alone —
+  delete them yourself once nothing is serving them.
 - **Old lego versions accumulate** under `/usr/local/lib/lego/`, about 70 MB
   each. Nothing prunes them on purpose: one of them is the running binary, and
   reverting `acme_client_lego_version` is how a bad release is rolled back.
@@ -101,35 +110,34 @@ variable. It is rendered to a `0600` file and passed to lego as
 
 ## Key variables
 
+All of them, in full:
+
 | Variable | Default | Purpose |
 |-------------------------------|-------------------------|-------------------------------------------------------|
 | `acme_client_certificates` | `[]` | The certificates this host issues; see below |
 | `acme_client_email` | `""` | ACME account contact; names the account directory |
 | `acme_client_dns_api_token` | `""` | Infomaniak token, `dns:read` + `dns:write`; vault only |
-| `acme_client_server` | Let's Encrypt production | ACME directory URL, overridable per certificate |
+| `acme_client_server` | Let's Encrypt production | ACME directory URL; point at staging while debugging |
 | `acme_client_dns_resolvers` | `1.1.1.1:53`, `8.8.8.8:53` | Resolvers for the DNS-01 pre-check; see the gotchas |
-| `acme_client_renew_days` | `30` | Renew below this much remaining validity |
-| `acme_client_deploy_dir_parent` | `/etc/ssl` | Certificates land in `<parent>/<zone>/` |
-| `acme_client_default_key_group` | `root` | Fallback group for the private key |
 | `acme_client_lego_version` | `5.3.1` | Pinned release; bump with the checksum |
+| `acme_client_lego_checksum` | sha256 of the tarball | Bump with the version |
 | `acme_client_issue` | `true` | Obtain missing certificates during the converge |
 | `acme_client_enable_timers` | `true` | Install and enable the renewal timers |
+
+Everything else is fixed on purpose: certificates land in `/etc/ssl/<zone>/`,
+state in `/var/lib/acme_client/<ca-host>/`, config in `/etc/acme-client/`, the
+binary in `/usr/local/lib/lego/<version>/`. Keys are `ec256`, renewal is at 30
+days remaining, the timer runs daily at 03:17 with a 3 h jitter, the certificate
+is `root:root 0644` and the private key `root:<key_group> 0640`.
 
 Per-entry keys of `acme_client_certificates` — only `zone` is required:
 
 | Key | Default | Purpose |
 |--------------------|-------------------------------|--------------------------------------------------|
 | `zone` | — | Names the deploy dir, the systemd instance, the config |
-| `domains` | `["*.<zone>", "<zone>"]` | SANs; wildcard first |
+| `domains` | `["*.<zone>", "<zone>"]` | SANs; the first one names the files on disk |
+| `key_group` | `root` | Group of the private key; `"1000"` for a gitea host |
 | `reload_commands` | `[]` | Run after the pair is replaced |
-| `key_group` | `acme_client_default_key_group` | Group of the private key |
-| `key_mode` | `"0640"` | Mode of the private key |
-| `cert_owner`/`cert_group`/`cert_mode` | the `acme_client_default_cert_*` values | Ownership of the certificate |
-| `key_owner` | `acme_client_default_key_owner` | Owner of the private key |
-| `server` | `acme_client_server` | Per-certificate ACME directory, e.g. staging |
-| `renew_days` | `acme_client_renew_days` | Per-certificate renewal threshold |
-| `key_type` | `acme_client_key_type` | Per-certificate key algorithm |
-| `deploy_dir` | `<parent>/<zone>` | Override the deploy directory entirely |
 
 ## Usage
 

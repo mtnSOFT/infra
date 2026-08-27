@@ -12,21 +12,19 @@ After=network-online.target
 Type=oneshot
 ExecStart=/usr/local/bin/acme-client-renew.sh %i
 
-# Only the token's PATH. lego reads any INFOMANIAK_* from a <VAR>_FILE, keeping
+# Only the token's PATH. lego reads INFOMANIAK_ACCESS_TOKEN from a _FILE, keeping
 # it out of this world-readable file and out of the env inherited by the reload
-# commands, i.e. out of docker compose.
-Environment=INFOMANIAK_ACCESS_TOKEN_FILE={{ acme_client_token_file }}
-{% for key, value in acme_client_provider_env | dictsort %}
-Environment={{ key }}={{ value }}
-{% endfor %}
+# commands, i.e. out of docker compose. Everything else is left at lego's own
+# defaults.
+Environment=INFOMANIAK_ACCESS_TOKEN_FILE=/etc/acme-client/dns-api-token
 
 # Type=oneshot has no default timeout. An unbounded hang would leave the unit
 # activating forever, and systemd skips a timer whose unit still runs - renewals
 # would stop silently.
-TimeoutStartSec={{ acme_client_renew_timeout }}
+TimeoutStartSec=30min
 
 # Deliberately light: the reload commands run arbitrary things, and
-# ProtectSystem= would block writes to the deploy directory.
+# ProtectSystem= would block writes to /etc/ssl.
 NoNewPrivileges=true
 ProtectHome=true
 PrivateTmp=true

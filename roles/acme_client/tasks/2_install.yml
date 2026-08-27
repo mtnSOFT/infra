@@ -1,18 +1,13 @@
 ---
-# lego verifies TLS to both the ACME directory and the DNS API.
-- name: Install the acme_client packages
-  ansible.builtin.apt:
-    name:
-      - ca-certificates
-    state: present
-
 # Cached, not fetched to a temp path: get_url checksums an existing dest first
 # and skips the download, so a converge re-verifies ~70 MB instead of re-pulling.
 # Checksum is not optional - this binary gets the DNS API token.
 - name: Download the pinned lego release
   ansible.builtin.get_url:
-    url: "{{ _acme_client_lego_release }}/{{ _acme_client_lego_tarball }}"
-    dest: "{{ acme_client_cache_dir }}/{{ _acme_client_lego_tarball }}"
+    url: >-
+      https://github.com/go-acme/lego/releases/download/v{{
+      acme_client_lego_version }}/{{ _acme_client_lego_tarball }}
+    dest: "/var/cache/acme-client/{{ _acme_client_lego_tarball }}"
     checksum: "sha256:{{ acme_client_lego_checksum }}"
     owner: root
     group: root
@@ -22,27 +17,18 @@
 # makes this both idempotent and able to upgrade.
 - name: Extract the lego binary
   ansible.builtin.unarchive:
-    src: "{{ acme_client_cache_dir }}/{{ _acme_client_lego_tarball }}"
-    dest: "{{ acme_client_lego_install_dir }}/{{ acme_client_lego_version }}"
+    src: "/var/cache/acme-client/{{ _acme_client_lego_tarball }}"
+    dest: "/usr/local/lib/lego/{{ acme_client_lego_version }}"
     include:
       - lego
     remote_src: true
-    creates: "{{ _acme_client_lego_bin }}"
+    creates: "/usr/local/lib/lego/{{ acme_client_lego_version }}/lego"
 
 # unarchive's mode: applies to the dest dir, not the members.
 - name: Set the lego binary permissions
   ansible.builtin.file:
-    path: "{{ _acme_client_lego_bin }}"
+    path: "/usr/local/lib/lego/{{ acme_client_lego_version }}/lego"
     state: file
     owner: root
     group: root
     mode: "0755"
-
-# Convenience only - nothing here calls lego through it.
-- name: Link lego into the default path
-  ansible.builtin.file:
-    path: /usr/local/bin/lego
-    src: "{{ _acme_client_lego_bin }}"
-    state: link
-    owner: root
-    group: root

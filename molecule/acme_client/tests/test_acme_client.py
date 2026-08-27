@@ -30,19 +30,20 @@ def test_lego_binary_is_installed_at_the_versioned_path(host):
     # acme_client_lego_version does not mean editing this test - but the binary
     # still has to agree with the directory it was extracted into, which is what
     # catches a stale checksum or a moved release URL.
-    links = host.file("/usr/local/bin/lego")
-    assert links.is_symlink
-    target = links.linked_to
-    assert target.startswith("/usr/local/lib/lego/")
+    versions = host.run("ls /usr/local/lib/lego").stdout.split()
+    assert len(versions) == 1
+    version = versions[0]
 
-    binary = host.file(target)
+    binary = host.file(f"/usr/local/lib/lego/{version}/lego")
     assert binary.is_file
     assert binary.user == "root"
     assert binary.group == "root"
     assert binary.mode == 0o755
+    assert version in host.run(f"/usr/local/lib/lego/{version}/lego --version").stdout
 
-    version = target.split("/")[-2]
-    assert version in host.run(f"{target} --version").stdout
+    # No convenience symlink in /usr/local/bin: the units and scripts reference
+    # the versioned path, so nothing needs one.
+    assert not host.file("/usr/local/bin/lego").exists
 
 
 def test_api_token_is_written_only_to_its_own_file(host):
@@ -89,13 +90,11 @@ def test_the_token_appears_nowhere_else(host):
         assert "INFOMANIAK_ACCESS_TOKEN=" not in content, path
 
 
-def test_state_and_deploy_directories(host):
-    # One state directory per CA host, so an entry pointed at staging cannot
-    # overwrite a production certificate.
-    ca = host.file(CA_DIR)
-    assert ca.is_directory
-    assert ca.mode == 0o700
-
+def test_deploy_directories(host):
+    # CA_DIR is deliberately not asserted here: the role no longer creates it,
+    # because lego creates its own --path tree with the same 0700. In this
+    # scenario it exists only because converge.yml fabricates it for the
+    # placeholders, so asserting it would just be testing the fixture.
     for zone in (ZONE_A, ZONE_B):
         deploy = host.file(f"/etc/ssl/{zone}")
         assert deploy.is_directory
@@ -114,43 +113,35 @@ def test_the_role_never_fabricates_certificate_material(host):
     assert not host.file(f"/etc/ssl/{ZONE_B}/privkey.pem").exists
 
 
+def test_certificate_conf_holds_only_what_varies_per_zone(host):
+    # The conf is deliberately tiny: everything identical across zones lives in
+    # the renew script instead. If this grows again, something that should have
+    # been static has been made per-certificate.
+    assert set(_conf(host, ZONE_A)) == {"DOMAINS", "CERT_BASE", "KEY_GROUP"}
+    assert set(_conf(host, ZONE_B)) == {"DOMAINS", "CERT_BASE", "KEY_GROUP"}
+
+
 def test_overridden_certificate_conf(host):
     conf = _conf(host, ZONE_A)
-    assert conf["ZONE"] == ZONE_A
     # All three SANs, in order, with the wildcard first - several wildcards in
     # one certificate is legitimate and must survive rendering.
-    assert conf["DOMAINS"] == (
-        f"*.{ZONE_A} {ZONE_A} *.dev.{ZONE_A}"
-    )
+    assert conf["DOMAINS"] == f"*.{ZONE_A} {ZONE_A} *.dev.{ZONE_A}"
     # lego derives the filename from the FIRST domain, "*" replaced by "_".
-    assert conf["SRC_CERT"] == f"{CA_DIR}/certificates/_.{ZONE_A}.crt"
-    assert conf["SRC_KEY"] == f"{CA_DIR}/certificates/_.{ZONE_A}.key"
-    assert conf["DST_CERT"] == f"/etc/ssl/{ZONE_A}/fullchain.pem"
-    assert conf["DST_KEY"] == f"/etc/ssl/{ZONE_A}/privkey.pem"
-    # Per-entry overrides win over the role-level values.
-    assert conf["RENEW_DAYS"] == "34"
+    assert conf["CERT_BASE"] == f"_.{ZONE_A}"
+    # Per-entry override, which is what a gitea host needs.
     assert conf["KEY_GROUP"] == "1000"
-    assert conf["RELOAD_SCRIPT"] == f"{CONFIG}/reload.d/{ZONE_A}.sh"
-    # Non-default resolvers from the test inventory, so this cannot pass by
-    # matching the role default.
-    assert conf["DNS_RESOLVERS"] == "9.9.9.9:53 149.112.112.112:53"
-    assert conf["DNS_PROVIDER"] == "infomaniak"
 
 
 def test_bare_certificate_conf_falls_back_to_the_defaults(host):
     conf = _conf(host, ZONE_B)
     # domains defaults to the wildcard plus the apex.
     assert conf["DOMAINS"] == f"*.{ZONE_B} {ZONE_B}"
-    assert conf["SRC_CERT"] == f"{CA_DIR}/certificates/_.{ZONE_B}.crt"
-    # Role-level renew_days, not the other entry's override.
-    assert conf["RENEW_DAYS"] == "45"
-    # acme_client_default_key_group, not the other entry's "1000".
+    assert conf["CERT_BASE"] == f"_.{ZONE_B}"
+    # Not the other entry's "1000".
     assert conf["KEY_GROUP"] == "root"
-    assert conf["KEY_MODE"] == "0640"
-    assert conf["CERT_MODE"] == "0644"
 
 
-def test_reload_script_exists_only_where_there_are_commands(host):
+def test_reload_scripts(host):
     script = host.file(f"{CONFIG}/reload.d/{ZONE_A}.sh")
     assert script.is_file
     assert script.mode == 0o700
@@ -158,9 +149,12 @@ def test_reload_script_exists_only_where_there_are_commands(host):
     assert "/containers/gitea/compose.yaml restart gitea" in body
     assert "/containers/vaultwarden/compose.yaml restart vaultwarden" in body
 
-    # The bare entry has no reload commands, so it must have no script at all
-    # rather than an empty one.
-    assert not host.file(f"{CONFIG}/reload.d/{ZONE_B}.sh").exists
+    # The bare entry gets a script too - always rendered, so there is no `when:`
+    # and no task to clean up a leftover. It must simply contain no command.
+    bare = host.file(f"{CONFIG}/reload.d/{ZONE_B}.sh")
+    assert bare.is_file
+    assert "docker" not in bare.content_string
+    assert host.run(f"{CONFIG}/reload.d/{ZONE_B}.sh").rc == 0
 
 
 def test_renew_script(host):
@@ -174,9 +168,20 @@ def test_renew_script(host):
     assert '"$LEGO_BIN" "$@" run' in body
     # The split-horizon fix.
     assert "--dns.resolvers" in body
-    # Reads its settings from the per-zone conf rather than being templated per
+    # Reads what varies from the per-zone conf rather than being templated per
     # certificate.
     assert f"{CONFIG}/certs/${{ZONE}}.conf" in body
+
+    # Everything identical across zones is baked in here, not repeated in each
+    # conf. Non-default values from the test inventory, so these cannot pass by
+    # matching a role default.
+    assert "EMAIL='acme-test@example.internal'" in body
+    assert "SERVER='https://acme-v02.api.letsencrypt.org/directory'" in body
+    assert "RESOLVERS='9.9.9.9:53 149.112.112.112:53'" in body
+    assert "RENEW_DAYS=30" in body
+    assert f"LEGO_DIR='{CA_DIR}'" in body
+    assert "--dns infomaniak" in body
+    assert "--key-type ec256" in body
 
 
 def test_deploy_script(host):
@@ -203,7 +208,8 @@ def test_service_unit(host):
     assert (
         f"Environment=INFOMANIAK_ACCESS_TOKEN_FILE={CONFIG}/dns-api-token" in body
     )
-    assert "Environment=INFOMANIAK_PROPAGATION_TIMEOUT=120" in body
+    # The only Environment= line: the rest used to set lego's own defaults.
+    assert len(re.findall(r"^Environment=", body, re.MULTILINE)) == 1
     # Type=oneshot has no start timeout by default, and systemd skips a timer
     # trigger whose unit is still running - an unbounded hang would stop
     # renewals for good, quietly.

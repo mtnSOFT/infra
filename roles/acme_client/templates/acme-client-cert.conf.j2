@@ -1,38 +1,15 @@
 # Ansible managed - DO NOT EDIT MANUALLY
 #
-# One certificate, sourced by acme-client-renew.sh and acme-client-deploy.sh.
-# Values are single-quoted; the role validates zones and domains as plain DNS
-# names, so nothing can close the quote and $DOMAINS is safe to word-split.
+# Only what differs between zones; the rest is baked into acme-client-renew.sh.
+# Single-quoted, and the role validates domains as plain DNS names, so nothing
+# can close the quote and $DOMAINS is safe to word-split.
 
-ZONE='{{ item.zone }}'
-DOMAINS='{{ item.domains | join(" ") }}'
-EMAIL='{{ acme_client_email }}'
-SERVER='{{ item.server }}'
-KEY_TYPE='{{ item.key_type }}'
-RENEW_DAYS='{{ item.renew_days }}'
-DNS_PROVIDER='{{ acme_client_dns_provider }}'
+DOMAINS='{{ item.domains | default(["*." ~ item.zone, item.zone]) | join(" ") }}'
 
-# Must be public resolvers - see acme_client_dns_resolvers in the role defaults.
-DNS_RESOLVERS='{{ acme_client_dns_resolvers | join(" ") }}'
+# lego names its output after the first domain, "*" -> "_". Templated rather than
+# derived in shell so the script needs no string munging to find it.
+CERT_BASE='{{ (item.domains | default(["*." ~ item.zone]))[0] | replace("*", "_") }}'
 
-LEGO_BIN='{{ _acme_client_lego_bin }}'
-LEGO_DIR='{{ item.lego_dir }}'
-
-# What lego writes: named after the first domain, "*" -> "_". The .crt is already
-# the full chain.
-SRC_CERT='{{ item.src_cert }}'
-SRC_KEY='{{ item.src_key }}'
-
-# What the consumers read.
-DST_CERT='{{ item.cert_file }}'
-DST_KEY='{{ item.key_file }}'
-
-CERT_OWNER='{{ item.cert_owner }}'
-CERT_GROUP='{{ item.cert_group }}'
-CERT_MODE='{{ item.cert_mode }}'
-KEY_OWNER='{{ item.key_owner }}'
-KEY_GROUP='{{ item.key_group }}'
-KEY_MODE='{{ item.key_mode }}'
-
-# Run after the pair is replaced, if it exists.
-RELOAD_SCRIPT='{{ item.reload_script }}'
+# Group of the deployed private key. gitea reads it as uid/gid 1000 and
+# crash-loops otherwise; root-only consumers can leave it at root.
+KEY_GROUP='{{ item.key_group | default("root") }}'

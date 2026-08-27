@@ -9,8 +9,8 @@ Description=Daily check of the %i certificate
 # Daily costs nothing (lego skips the network when not due) and gives ~30
 # attempts before expiry. Odd minute + delay because CAs ask clients not to
 # converge on round times.
-OnCalendar={{ acme_client_renew_oncalendar }}
-RandomizedDelaySec={{ acme_client_renew_randomized_delay }}
+OnCalendar=*-*-* 03:17:00
+RandomizedDelaySec=3h
 
 # Catch up after boot instead of skipping the day.
 Persistent=true

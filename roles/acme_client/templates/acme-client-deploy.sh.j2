@@ -17,19 +17,26 @@
 # bind-mounts a file by inode, so a running container keeps the old one.
 set -eu
 
+LEGO_DIR='/var/lib/acme_client/{{ acme_client_server | urlsplit("hostname") }}'
+
 ZONE="${1:-}"
 if [ -z "$ZONE" ]; then
   echo "usage: $0 <zone>" >&2
   exit 2
 fi
 
-CONF="{{ acme_client_config_dir }}/certs/${ZONE}.conf"
+CONF="/etc/acme-client/certs/${ZONE}.conf"
 if [ ! -f "$CONF" ]; then
   echo "acme-client: no configuration for '$ZONE' at $CONF" >&2
   exit 2
 fi
 # shellcheck source=/dev/null
 . "$CONF"
+
+SRC_CERT="${LEGO_DIR}/certificates/${CERT_BASE}.crt"
+SRC_KEY="${LEGO_DIR}/certificates/${CERT_BASE}.key"
+DST_CERT="/etc/ssl/${ZONE}/fullchain.pem"
+DST_KEY="/etc/ssl/${ZONE}/privkey.pem"
 
 # Nothing issued yet - a converge before the first run. Not an error.
 if [ ! -f "$SRC_CERT" ] || [ ! -f "$SRC_KEY" ]; then
@@ -41,9 +48,10 @@ if cmp -s "$SRC_CERT" "$DST_CERT" && cmp -s "$SRC_KEY" "$DST_KEY"; then
   exit 0
 fi
 
+# Certificate is public material; the key is not, and only its group varies.
 umask 077
-install -o "$CERT_OWNER" -g "$CERT_GROUP" -m "$CERT_MODE" "$SRC_CERT" "$DST_CERT.new"
-install -o "$KEY_OWNER" -g "$KEY_GROUP" -m "$KEY_MODE" "$SRC_KEY" "$DST_KEY.new"
+install -o root -g root -m 0644 "$SRC_CERT" "$DST_CERT.new"
+install -o root -g "$KEY_GROUP" -m 0640 "$SRC_KEY" "$DST_KEY.new"
 
 # Same directory, so renames rather than copies.
 mv -f "$DST_CERT.new" "$DST_CERT"
@@ -52,7 +60,7 @@ mv -f "$DST_KEY.new" "$DST_KEY"
 # Marker that 9_certificate.yml matches on to report a change.
 echo "acme-client: deployed $DST_CERT and $DST_KEY"
 
-# Absent when the certificate has no consumers here.
-if [ -x "$RELOAD_SCRIPT" ]; then
-  exec "$RELOAD_SCRIPT"
+RELOAD="/etc/acme-client/reload.d/${ZONE}.sh"
+if [ -x "$RELOAD" ]; then
+  exec "$RELOAD"
 fi
