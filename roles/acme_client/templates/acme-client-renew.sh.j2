@@ -7,23 +7,44 @@
 # a converge adds --now, which drops lego's own sleep (up to 8 min whenever
 # stdout is not a tty) so an interactive run does not look hung.
 #
-# The two subcommands are NOT interchangeable - picking between them is the point
-# of this script:
-#   run   - ALWAYS issues, ignoring what is on disk. On a schedule that exhausts
-#           the limit (5 per name set per 7 days, no renewal exemption) in a week.
-#   renew - reads the certificate and returns without network above --days.
-# So: run once to bootstrap, renew after.
+# lego v5 has ONE command for this: `run` is "get or renew", and it decides for
+# itself whether the certificate on disk is due - `--renew-days` sets the
+# threshold and `--renew-force` (not used here) is what overrides it. So there is
+# no branch here and nothing to guard: calling this every day is free, because a
+# certificate that is not due costs no network traffic.
 #
-# Deploy runs unconditionally afterwards rather than as a lego --renew-hook: that
-# way a converge repairs a missing deployed pair, and a failed deploy is retried
-# next tick instead of skipped for three months as "fresh".
+# Note for anyone porting older examples: in v5 all of these are `run` flags and
+# must come AFTER the command. Passing them before it fails with
+# "flag provided but not defined". The separate `renew` command of v4 is gone.
+#
+# --cert.name fixes the storage name instead of letting lego derive one from the
+# first domain (where "*" became "_"), so the paths the deploy step reads are
+# predictable and do not change if the domain list is edited.
+#
+# --force-cert-domains makes lego compare the SANs on disk with $DOMAINS and
+# reissue when they differ. Without it, adding a domain to an entry would be
+# silently ignored until the certificate happened to come up for renewal.
+#
+# Deploy runs afterwards unconditionally rather than as a lego --deploy-hook:
+# that way a converge repairs a missing deployed pair, and a failed deploy is
+# retried next tick instead of skipped for three months as "already fresh".
 set -eu
+
+# The API credential, set here rather than in the systemd unit because this
+# script has two callers: the timer, and an Ansible converge that runs it
+# directly. Only the unit could set it before, so a converge had no credentials
+# and lego failed with "some credentials information are missing".
+#
+# _FILE, so only the path is ever in the environment - the token itself stays in
+# a 0600 file and is never inherited by the reload commands.
+export INFOMANIAK_ACCESS_TOKEN_FILE=/etc/acme-client/dns-api-token
 
 # Same for every zone, so templated here rather than into each .conf.
 EMAIL='{{ acme_client_email }}'
 SERVER='{{ acme_client_server }}'
 LEGO_BIN='/usr/local/lib/lego/{{ acme_client_lego_version }}/lego'
-# Per CA host, so flipping SERVER to staging cannot clobber a production cert.
+# Per CA host: lego namespaces accounts by CA but not certificates, so without
+# this a staging run would overwrite the production certificate.
 LEGO_DIR='/var/lib/acme_client/{{ acme_client_server | urlsplit("hostname") }}'
 # Must be public resolvers - see acme_client_dns_resolvers in the role defaults.
 RESOLVERS='{{ acme_client_dns_resolvers | join(" ") }}'
@@ -43,21 +64,23 @@ fi
 # shellcheck source=/dev/null
 . "$CONF"
 
-SRC_CERT="${LEGO_DIR}/certificates/${CERT_BASE}.crt"
+SRC_CERT="${LEGO_DIR}/certificates/${ZONE}.crt"
 
+# Read before `set --` overwrites the positional parameters.
 no_sleep=""
 if [ "${2:-}" = "--now" ]; then
   no_sleep="--no-random-sleep"
 fi
 
-# Global flags go before the subcommand. Appending to "$@" avoids a line
-# continuation inside a for loop.
 set -- --accept-tos \
   --email "$EMAIL" \
   --server "$SERVER" \
   --path "$LEGO_DIR" \
   --dns infomaniak \
-  --key-type ec256
+  --key-type ec256 \
+  --cert.name "$ZONE" \
+  --renew-days "$RENEW_DAYS" \
+  --force-cert-domains
 
 # Word splitting intended: validated as plain host:port and DNS names.
 # shellcheck disable=SC2086
@@ -70,16 +93,15 @@ for domain in $DOMAINS; do
   set -- "$@" -d "$domain"
 done
 
-if [ -f "$SRC_CERT" ]; then
-  # $no_sleep is one optional flag or empty, so it stays unquoted.
-  # shellcheck disable=SC2086
-  "$LEGO_BIN" "$@" renew --days "$RENEW_DAYS" $no_sleep
-else
-  "$LEGO_BIN" "$@" run
+if [ -n "$no_sleep" ]; then
+  set -- "$@" "$no_sleep"
 fi
 
-# If lego's naming ever changes, deploy would silently do nothing and leave a
-# stale certificate until it expired. Fail loudly instead.
+"$LEGO_BIN" run "$@"
+
+# lego reporting success without a certificate at the expected path would leave
+# the deploy step silently doing nothing, and a stale certificate in place until
+# it expired. Fail loudly instead.
 if [ ! -f "$SRC_CERT" ]; then
   echo "acme-client: lego reported success but $SRC_CERT is missing" >&2
   exit 1

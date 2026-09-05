@@ -12,11 +12,9 @@ After=network-online.target
 Type=oneshot
 ExecStart=/usr/local/bin/acme-client-renew.sh %i
 
-# Only the token's PATH. lego reads INFOMANIAK_ACCESS_TOKEN from a _FILE, keeping
-# it out of this world-readable file and out of the env inherited by the reload
-# commands, i.e. out of docker compose. Everything else is left at lego's own
-# defaults.
-Environment=INFOMANIAK_ACCESS_TOKEN_FILE=/etc/acme-client/dns-api-token
+# No Environment= for the API credential: the script sets it itself, so that it
+# works the same way here and when a converge runs the script directly. Setting
+# it in both places would just be two things to keep in sync.
 
 # Type=oneshot has no default timeout. An unbounded hang would leave the unit
 # activating forever, and systemd skips a timer whose unit still runs - renewals

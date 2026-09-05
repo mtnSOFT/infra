@@ -11,8 +11,8 @@
     # can be exercised end to end without a CA, a DNS provider or a network.
     # The paths are spelled out rather than taken from the role's own facts, so
     # they independently check the derivation: the state directory is named after
-    # the ACME server's host, and the certificate after the first domain with
-    # "*" replaced by "_".
+    # the ACME server's host, and the certificate after the zone, which the renew
+    # script pins with lego's --cert.name.
     #
     # Only int.example.internal gets these. lab.example.internal is deliberately
     # left with nothing, which is what lets the tests cover the "not issued yet"
@@ -30,7 +30,7 @@
       ansible.builtin.copy:
         content: "molecule placeholder {{ item }} - not a real key\n"
         dest: >-
-          /var/lib/acme_client/acme-v02.api.letsencrypt.org/certificates/_.int.example.internal.{{ item }}
+          /var/lib/acme_client/acme-v02.api.letsencrypt.org/certificates/int.example.internal.{{ item }}
         owner: root
         group: root
         mode: "0600"

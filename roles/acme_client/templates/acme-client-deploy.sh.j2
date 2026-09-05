@@ -33,8 +33,10 @@ fi
 # shellcheck source=/dev/null
 . "$CONF"
 
-SRC_CERT="${LEGO_DIR}/certificates/${CERT_BASE}.crt"
-SRC_KEY="${LEGO_DIR}/certificates/${CERT_BASE}.key"
+# The renew script pins lego's storage name to the zone with --cert.name, so
+# these are predictable rather than derived from the domain list.
+SRC_CERT="${LEGO_DIR}/certificates/${ZONE}.crt"
+SRC_KEY="${LEGO_DIR}/certificates/${ZONE}.key"
 DST_CERT="/etc/ssl/${ZONE}/fullchain.pem"
 DST_KEY="/etc/ssl/${ZONE}/privkey.pem"
 

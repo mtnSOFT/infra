@@ -117,8 +117,8 @@ def test_certificate_conf_holds_only_what_varies_per_zone(host):
     # The conf is deliberately tiny: everything identical across zones lives in
     # the renew script instead. If this grows again, something that should have
     # been static has been made per-certificate.
-    assert set(_conf(host, ZONE_A)) == {"DOMAINS", "CERT_BASE", "KEY_GROUP"}
-    assert set(_conf(host, ZONE_B)) == {"DOMAINS", "CERT_BASE", "KEY_GROUP"}
+    assert set(_conf(host, ZONE_A)) == {"DOMAINS", "KEY_GROUP"}
+    assert set(_conf(host, ZONE_B)) == {"DOMAINS", "KEY_GROUP"}
 
 
 def test_overridden_certificate_conf(host):
@@ -126,8 +126,6 @@ def test_overridden_certificate_conf(host):
     # All three SANs, in order, with the wildcard first - several wildcards in
     # one certificate is legitimate and must survive rendering.
     assert conf["DOMAINS"] == f"*.{ZONE_A} {ZONE_A} *.dev.{ZONE_A}"
-    # lego derives the filename from the FIRST domain, "*" replaced by "_".
-    assert conf["CERT_BASE"] == f"_.{ZONE_A}"
     # Per-entry override, which is what a gitea host needs.
     assert conf["KEY_GROUP"] == "1000"
 
@@ -136,7 +134,6 @@ def test_bare_certificate_conf_falls_back_to_the_defaults(host):
     conf = _conf(host, ZONE_B)
     # domains defaults to the wildcard plus the apex.
     assert conf["DOMAINS"] == f"*.{ZONE_B} {ZONE_B}"
-    assert conf["CERT_BASE"] == f"_.{ZONE_B}"
     # Not the other entry's "1000".
     assert conf["KEY_GROUP"] == "root"
 
@@ -162,10 +159,24 @@ def test_renew_script(host):
     assert script.is_file
     assert script.mode == 0o700
     body = script.content_string
-    # The run/renew split is the whole point of the script: `lego run` issues a
-    # new certificate every time it is called.
-    assert "renew --days" in body
-    assert '"$LEGO_BIN" "$@" run' in body
+    # lego v5 has a single "get or renew" command that decides for itself
+    # whether the certificate is due, so there is one invocation and no branch.
+    assert '"$LEGO_BIN" run "$@"' in body
+    assert "--renew-days" in body
+    # v5 flags are command flags: passing them before `run` fails with "flag
+    # provided but not defined", and the v4 `renew` command no longer exists.
+    assert "renew --days" not in body
+    assert '"$LEGO_BIN" "$@" run' not in body
+    # The credential lives here, not in the unit, so that a converge running
+    # this script directly has it too - only the path, never the token value.
+    assert (
+        f"export INFOMANIAK_ACCESS_TOKEN_FILE={CONFIG}/dns-api-token" in body
+    )
+    # Storage name pinned, so the deploy paths do not depend on lego deriving a
+    # filename from the domain list.
+    assert '--cert.name "$ZONE"' in body
+    # Makes an edit to `domains` actually take effect.
+    assert "--force-cert-domains" in body
     # The split-horizon fix.
     assert "--dns.resolvers" in body
     # Reads what varies from the per-zone conf rather than being templated per
@@ -204,12 +215,10 @@ def test_service_unit(host):
     body = host.file("/etc/systemd/system/acme-client-renew@.service").content_string
     assert "Type=oneshot" in body
     assert "ExecStart=/usr/local/bin/acme-client-renew.sh %i" in body
-    # Only the path of the token, never its value.
-    assert (
-        f"Environment=INFOMANIAK_ACCESS_TOKEN_FILE={CONFIG}/dns-api-token" in body
-    )
-    # The only Environment= line: the rest used to set lego's own defaults.
-    assert len(re.findall(r"^Environment=", body, re.MULTILINE)) == 1
+    # No Environment= at all: the credential is exported by the script, so that
+    # it reaches lego identically here and when a converge runs the script
+    # directly. Setting it only here is what broke the converge path.
+    assert not re.search(r"^Environment=", body, re.MULTILINE)
     # Type=oneshot has no start timeout by default, and systemd skips a timer
     # trigger whose unit is still running - an unbounded hang would stop
     # renewals for good, quietly.
@@ -283,6 +292,32 @@ def test_deploy_places_the_pair_then_becomes_idempotent(host):
     second = host.run(f"/usr/local/bin/acme-client-deploy.sh {ZONE_A}")
     assert second.rc == 0
     assert second.stdout.strip() == ""
+
+
+def test_lego_gets_its_credential_when_run_outside_systemd(host):
+    # Regression test. The credential used to be set only by the systemd unit,
+    # but an Ansible converge runs this script directly - so lego got no
+    # credentials there and failed with "some credentials information are
+    # missing", and because lego logs to stdout the role reported an empty
+    # error. Stub the binary with one that dumps its environment and check what
+    # lego would actually receive.
+    stub = "/tmp/legostub.sh"
+    host.run(f"printf '#!/bin/sh\\nenv\\nexit 7\\n' > {stub} && chmod 0755 {stub}")
+    host.run(
+        f"sed 's#^LEGO_BIN=.*#LEGO_BIN={stub}#' /usr/local/bin/acme-client-renew.sh"
+        " > /tmp/renew-probe.sh && chmod 0755 /tmp/renew-probe.sh"
+    )
+    # env -i: an empty environment, the worst case the converge path can present.
+    result = host.run(f"env -i /tmp/renew-probe.sh {ZONE_A}")
+
+    token_file = f"{CONFIG}/dns-api-token"
+    assert f"INFOMANIAK_ACCESS_TOKEN_FILE={token_file}" in result.stdout
+    # ...and the path it points at has to be real, or lego fails the same way.
+    assert host.file(token_file).exists
+    # The token value itself never enters the environment - only its path.
+    assert TOKEN not in result.stdout
+
+    host.run(f"rm -f {stub} /tmp/renew-probe.sh")
 
 
 def test_scripts_reject_an_unknown_zone(host):

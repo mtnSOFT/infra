@@ -40,19 +40,24 @@
 - name: Assert every acme_client certificate was obtained
   ansible.builtin.assert:
     that:
-      - _acme_client_renew.results | rejectattr('rc', 'equalto', 0) | list | length == 0
+      - _failed | length == 0
+    # lego logs everything, errors included, to STDOUT - its stderr is empty even
+    # on failure. Reporting stderr alone here printed [''] and hid the reason.
     fail_msg: >-
-      lego failed for
-      {{ _acme_client_renew.results | rejectattr('rc', 'equalto', 0)
-         | map(attribute='item.zone') | list | join(', ') }}.
-      If it waited and then timed out, the DNS-01 pre-check is almost certainly
-      resolving the challenge name against the internal DNS instead of the
-      public zone - check acme_client_dns_resolvers, and compare
-      `dig @1.1.1.1 SOA _acme-challenge.<zone>` with `dig SOA
-      _acme-challenge.<zone>`. Do not simply re-run: `lego run` issues a new
-      certificate every time, and the limit is 5 per identical name set per 7
-      days. Output:
-      {{ _acme_client_renew.results | rejectattr('rc', 'equalto', 0)
-         | map(attribute='stderr') | list }}
+      lego failed for {{ _failed | map(attribute='item.zone') | list | join(', ') }}.
+      The reason is in the lego output below.
+      If it waited and then timed out, the DNS-01 pre-check resolved the
+      challenge name against the internal DNS instead of the public zone - check
+      acme_client_dns_resolvers, and compare
+      `dig @1.1.1.1 SOA _acme-challenge.<zone>` with `dig SOA _acme-challenge.<zone>`.
+      Re-running is safe in itself - lego skips a certificate that is not due -
+      but the duplicate limit is 5 per identical name set per 7 days, so switch
+      acme_client_server to the staging endpoint before iterating.
+      lego output: {{ _failed | map(attribute='stdout') | list }}
+      Script errors: {{ _failed | map(attribute='stderr') | select | list }}
+  vars:
+    _failed: >-
+      {{ _acme_client_renew.results | default([])
+         | selectattr('rc', 'defined') | rejectattr('rc', 'equalto', 0) | list }}
   no_log: false
   when: acme_client_issue | bool

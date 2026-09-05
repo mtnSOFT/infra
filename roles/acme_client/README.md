@@ -22,9 +22,11 @@ Infomaniak DNS API, and deployed where the service roles already read them.
 
 It does *not* retire a certificate when its entry is removed — see the gotchas.
 
-The API token is never a shell argument, a unit-file value or an environment
-variable. It is rendered to a `0600` file and passed to lego as
-`INFOMANIAK_ACCESS_TOKEN_FILE`.
+The API token itself is never a shell argument, a unit-file value or an
+environment variable. It is rendered to a `0600` file, and only that file's
+*path* is exported — as `INFOMANIAK_ACCESS_TOKEN_FILE`, by the renewal script
+rather than by the systemd unit, so that lego is given it identically whether
+the timer or an Ansible converge invoked the script.
 
 ## Gotchas
 
@@ -42,8 +44,9 @@ variable. It is rendered to a `0600` file and passed to lego as
   dig         SOA _acme-challenge.int.example.com   # will be the internal zone
   ```
 
-  Do **not** reach for lego's `--dns.propagation-disable-ans` instead. It
-  silences the check rather than fixing it, and then hides real propagation
+  Do **not** reach for lego's `--dns.propagation.disable-ans` (or
+  `--dns.propagation.disable-rns`, or `--dns.propagation.wait`) instead. They
+  silence the check rather than fixing it, and then hide real propagation
   failures too.
 - **The internal zones must stay undelegated in the public zone.** An `NS` record
   for one moves the challenge name into the child zone: the parent's nameservers
@@ -51,12 +54,23 @@ variable. It is rendered to a `0600` file and passed to lego as
   for everyone, not just locally. If a zone ever has to be delegated, put a
   public `_acme-challenge.<zone>` CNAME into a zone the API can still write —
   lego follows it.
-- **`lego run` is not idempotent; `lego renew` is.** `run` issues a new
-  certificate every time it is called and overwrites what is there. The renewal
-  script picks between them, which is why it must not be bypassed. Never "just
-  run it again" to debug: the limit is 5 per identical name set per 7 days, with
-  no renewal exemption. Set `server:` on the entry to the staging endpoint
-  instead.
+- **lego logs to stdout, including its errors — its stderr stays empty.** When a
+  renewal fails, the reason is in stdout; a tool that reports only stderr shows
+  nothing. To see it by hand:
+  ```bash
+  /usr/local/bin/acme-client-renew.sh <zone> --now
+  journalctl -u acme-client-renew@<zone> --no-pager -n 50   # timer runs
+  ```
+- **lego v5's flags are `run` flags, not global ones.** `lego --accept-tos … run`
+  fails with `flag provided but not defined: -accept-tos`; everything goes
+  *after* the command. The v4 `renew` command no longer exists — v5's `run` is
+  "get or renew" and decides for itself whether the certificate is due
+  (`--renew-days` sets the threshold, `--renew-force` overrides it). Older
+  examples on the internet, and older versions of this role, get this wrong.
+- **Debugging still costs certificates.** `run` skips a certificate that is not
+  due, but `--renew-force` and a deleted state directory both cause a real
+  issuance, and the limit is 5 per identical name set per 7 days with no renewal
+  exemption. Point `acme_client_server` at the staging endpoint instead.
 - **A renewal is invisible until the consumers restart.** Docker bind-mounts a
   single file by inode, so a running container keeps reading the file it started
   with no matter what replaces the path. An empty `reload_commands` on a
@@ -77,11 +91,13 @@ variable. It is rendered to a `0600` file and passed to lego as
 - **A wildcard covers one label only.** `*.lab.example.com` matches
   `host.lab.example.com` but not `host.dev.lab.example.com`, which needs its own
   entry in `domains`.
-- **Never reorder `domains`, only append.** lego names the files it writes after
-  the *first* domain, so inserting a name at the top renames the certificate on
-  disk. The next run then finds nothing to renew and issues a fresh certificate
-  instead — one of the five per week. Several wildcards in one certificate are
-  fine; the first one just has to stay first.
+- **Editing `domains` reissues the certificate.** The role passes lego's
+  `--cert.name` (so the files on disk are named after the zone, and reordering
+  the list is harmless) together with `--force-cert-domains`, which makes lego
+  compare the SANs on disk against `domains` and reissue when they differ.
+  Without that flag an added domain would be silently ignored until the next
+  natural renewal; with it, the edit costs one of the five issuances per week.
+  Several wildcards in one certificate are fine.
 - **Keep a zone to four hosts or fewer.** Hosts sharing a zone all issue on the
   same day at bring-up, so they share an expiry and then cross the 30-day
   renewal threshold together, forever — `RandomizedDelaySec` only spreads them
@@ -186,8 +202,8 @@ the shape of the deployment:
 
 ```ini
 [acme_client]
-titan                  # all three get the certificates in
-stargate               # group_vars/acme_client/vars.yml
+apphost                # all three get the certificates in
+dnshost                # group_vars/acme_client/vars.yml
 labhost
 ```
 
