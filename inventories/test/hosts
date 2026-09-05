@@ -15,3 +15,6 @@ testhost-ubuntu-24.04
 
 [gitea]
 testhost-ubuntu-24.04
+
+[acme_client]
+testhost-ubuntu-24.04

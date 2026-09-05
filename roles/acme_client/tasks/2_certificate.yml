@@ -1,0 +1,80 @@
+---
+# Created even when nothing is issued, so the path a consuming role points at
+# exists from the first converge. 0755: the directory is public, the private key
+# inside it is not.
+- name: Create the acme_client certificate directory
+  ansible.builtin.file:
+    path: "{{ acme_client_cert_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+# ansible.builtin.command runs without a shell, so a wildcard domain reaches
+# acme.sh unexpanded - do not turn this into ansible.builtin.shell.
+#
+# The token goes in as an environment variable because acme.sh saves it to
+# /root/.acme.sh/account.conf (0600 root) on first use; that is what lets the
+# cron renewal authenticate without ansible.
+#
+# rc 2 is acme.sh's "skip, the certificate is not due for renewal" - a no-op, not
+# a failure, and the reason a re-converge reports no change. acme_client_force
+# turns that skip off, which is how a certificate is replaced before it is due.
+- name: Issue the acme_client certificate
+  ansible.builtin.command:
+    cmd: >-
+      /root/.acme.sh/acme.sh --issue --server {{ acme_client_server }}
+      --dns dns_infomaniak --keylength {{ acme_client_keylength }}
+      {{ '--force' if acme_client_force | bool else '' }}
+      {% for domain in acme_client_domains %}-d {{ domain }} {% endfor %}
+  environment:
+    INFOMANIAK_API_TOKEN: "{{ acme_client_infomaniak_api_token }}"
+  register: acme_client_issue_result
+  changed_when: acme_client_issue_result.rc == 0
+  failed_when: acme_client_issue_result.rc not in [0, 2]
+  when: acme_client_issue | bool
+
+- name: Check whether the acme_client certificate is already deployed
+  ansible.builtin.stat:
+    path: "{{ acme_client_cert_dir }}/fullchain.pem"
+    get_checksum: false
+  register: acme_client_deployed
+
+# --install-cert records these paths in the domain's config, so the cron renewal
+# re-copies the files and re-runs the reload command on its own. It is therefore
+# only run when there is something new to deploy: nothing there yet, or the task
+# above just obtained a certificate. Running it on a steady-state converge would
+# execute --reloadcmd - acme.sh does that inline - and restart the consuming
+# service every time.
+#
+# -d takes the first domain because that is the name acme.sh filed the
+# certificate under, and --ecc selects the EC state directory.
+- name: Install the acme_client certificate to its shared path
+  ansible.builtin.command:
+    cmd: >-
+      /root/.acme.sh/acme.sh --install-cert
+      {{ '--ecc' if acme_client_keylength.startswith('ec-') else '' }}
+      -d {{ acme_client_domains[0] }}
+      --cert-file {{ acme_client_cert_dir }}/cert.pem
+      --key-file {{ acme_client_cert_dir }}/key.pem
+      --fullchain-file {{ acme_client_cert_dir }}/fullchain.pem
+      {% if acme_client_reload_command | length > 0 %}
+      --reloadcmd "{{ acme_client_reload_command }}"
+      {% endif %}
+  changed_when: true
+  when:
+    - acme_client_issue | bool
+    - not acme_client_deployed.stat.exists or acme_client_issue_result is changed
+
+# acme.sh writes the key with the umask it inherits, and a key only root can read
+# means a container that bind-mounts it crash-loops on start - roles like gitea
+# assert readability by their own uid/gid before they render anything. acme.sh
+# preserves the mode of an existing file, so this survives renewals.
+- name: Restrict the acme_client private key
+  ansible.builtin.file:
+    path: "{{ acme_client_cert_dir }}/key.pem"
+    state: file
+    owner: root
+    group: "{{ acme_client_key_group }}"
+    mode: "0640"
+  when: acme_client_issue | bool

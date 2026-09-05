@@ -1,0 +1,66 @@
+---
+# Pinned acme.sh git tag. The client is cloned and installed from source rather
+# than piped from get.acme.sh: this script is handed the DNS API token and runs
+# as root out of cron, so the version a converge installs has to be the one that
+# was reviewed. Bump deliberately.
+acme_client_version: "3.1.4"
+
+# ACME account contact. acme.sh stores it in account.conf on install and reuses
+# it for every certificate, so changing it later needs --update-account.
+acme_client_email: ""
+
+# The -d arguments of the single certificate this role issues. The first entry
+# names the certificate for acme.sh - everything else is a SAN on the same cert.
+# Empty is a configuration error, not a no-op: 1_install fails on it.
+acme_client_domains: []
+
+# Infomaniak API token, from vault. Needs domain:read, dns:read and dns:write.
+# Account-wide - there is no per-zone scoping, so this token can rewrite every
+# zone in the account.
+acme_client_infomaniak_api_token: ""
+
+# CA shorthand passed to --server. acme.sh 3.x defaults to ZeroSSL, which needs
+# EAB registration, so this is set explicitly. Use "letsencrypt_test" while
+# debugging: the production CA allows 5 duplicate certificates per week and a
+# failed deploy loop burns through that fast. acme.sh records the CA per domain,
+# so the cron renewal stays on whichever one issued.
+acme_client_server: "letsencrypt"
+
+# Key type. "ec-256" keeps the --ecc suffix acme.sh appends to its state
+# directory, which is why the install-cert step below passes --ecc.
+acme_client_keylength: "ec-256"
+
+# Name of the deployed certificate directory. Derived from the first domain with
+# the wildcard stripped, because acme.sh's own state directory is literally named
+# "*.int.example.net_ecc" - an asterisk in a path every consumer would have to
+# quote. Override only to pick a different directory name.
+acme_client_cert_name: "{{ acme_client_domains[0] | regex_replace('^\\*\\.', '') }}"
+
+# Where --install-cert deposits cert.pem, key.pem and fullchain.pem. This is the
+# stable path other roles point at, e.g. gitea_tls_cert_file. acme.sh remembers
+# it and rewrites these files itself on every renewal.
+acme_client_cert_dir: "/etc/ssl/acme/{{ acme_client_cert_name }}"
+
+# Group that may read key.pem, which is set to 0640 root:<group>. A 0600
+# root:root key is unreadable to a container that bind-mounts it, and roles like
+# gitea assert readability by their own uid/gid before they start. Set this to
+# the consumer's gid (gitea uses 1000).
+acme_client_key_group: "root"
+
+# Optional --reloadcmd, run by acme.sh after a successful renewal. A bind-mounted
+# certificate file keeps pointing at the inode it was mounted from, so a consumer
+# only picks up a renewal when it is restarted, e.g.
+# "docker compose -f /containers/gitea/compose.yaml restart gitea".
+acme_client_reload_command: ""
+
+# Re-issue even when the current certificate is still valid. acme.sh skips a
+# certificate that is not due, which is what makes a re-converge a no-op - this
+# overrides that. A one-off switch, not something to leave on: every forced run
+# spends one of the CA's five duplicate certificates per name set per week. Pass
+# it on the command line, e.g. `-e acme_client_force=true`.
+acme_client_force: false
+
+# Talk to the CA during the converge. Free when the certificate is not due, and
+# puts the first one on a fresh host before a consumer role asserts it exists.
+# false in molecule: the test container has no credentials and no route to a CA.
+acme_client_issue: true

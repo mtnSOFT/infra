@@ -1,0 +1,14 @@
+---
+# The test container has no route to a CA and no Infomaniak credentials, so
+# nothing is issued - the scenario verifies the installed client, the deployed
+# certificate directory and the renewal cron job.
+acme_client_issue: false
+
+acme_client_email: "acme-test@example.internal"
+
+# .internal is reserved, so even a mis-gated converge could not reach a real CA.
+# Two entries, the first a wildcard, so the scenario also covers the cert name
+# being derived from it with the wildcard stripped.
+acme_client_domains:
+  - "*.int.example.internal"
+  - "int.example.internal"

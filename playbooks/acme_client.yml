@@ -1,0 +1,8 @@
+---
+# Run this before the roles that consume the certificate - they assert the files
+# exist, so on a fresh host they fail if this has not run yet.
+- name: Apply acme_client role
+  hosts: acme_client
+  become: true
+  roles:
+    - acme_client

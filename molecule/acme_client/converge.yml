@@ -1,0 +1,10 @@
+---
+# Test values live in inventories/test/group_vars/acme_client/. Nothing is issued
+# there, so the role needs no credential and there is no vault file for this
+# group - the scenario covers the install, the deployed directory and the renewal
+# cron job, which is everything that does not need a CA.
+- name: Converge
+  hosts: acme_client
+  become: true
+  roles:
+    - role: acme_client

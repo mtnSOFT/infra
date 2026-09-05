@@ -1,0 +1,53 @@
+---
+# acme_client_cert_name indexes acme_client_domains[0], so an empty list would
+# fail later with an index error instead of saying what is missing. The token is
+# only required when something is actually issued, which is what lets the
+# molecule scenario run without a credential.
+- name: Validate the acme_client settings
+  ansible.builtin.assert:
+    that:
+      - acme_client_email | length > 0
+      - acme_client_domains | length > 0
+      - not (acme_client_issue | bool) or acme_client_infomaniak_api_token | length > 0
+    fail_msg: >-
+      acme_client_email and acme_client_domains must be set, and
+      acme_client_infomaniak_api_token is required while acme_client_issue is
+      true. Got email={{ acme_client_email }},
+      domains={{ acme_client_domains }}, issue={{ acme_client_issue }},
+      token_set={{ acme_client_infomaniak_api_token | length > 0 }}.
+  # ansible.cfg turns no_log on for every task, which would censor the message
+  # that makes this failure actionable. The token itself is not in it.
+  no_log: false
+
+# git for the checkout below, curl and openssl because acme.sh shells out to
+# them, cron because ansible.builtin.cron needs a crontab binary. linux_base
+# already installs cron on a real host, but the molecule container runs this
+# role on its own.
+- name: Install the acme_client packages
+  ansible.builtin.apt:
+    name:
+      - git
+      - curl
+      - openssl
+      - cron
+    state: present
+
+- name: Check out acme.sh at the pinned version
+  ansible.builtin.git:
+    repo: "https://github.com/acmesh-official/acme.sh.git"
+    dest: /usr/local/src/acme.sh
+    version: "{{ acme_client_version }}"
+  register: acme_client_source
+
+# --nocron: the renewal schedule is declared in 3_cron.yml instead, so it is
+# visible in the role and removable. Gated on the checkout rather than on
+# `creates:` so that bumping acme_client_version re-runs the installer, which a
+# path guard would not.
+- name: Install acme.sh for root
+  ansible.builtin.command:
+    cmd: >-
+      ./acme.sh --install --home /root/.acme.sh
+      --accountemail {{ acme_client_email }} --nocron
+    chdir: /usr/local/src/acme.sh
+  when: acme_client_source is changed
+  changed_when: true
