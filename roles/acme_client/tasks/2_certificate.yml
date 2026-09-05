@@ -40,16 +40,31 @@
     get_checksum: false
   register: acme_client_deployed
 
-# --install-cert records these paths in the domain's config, so the cron renewal
-# re-copies the files and re-runs the reload command on its own. It is therefore
-# only run when there is something new to deploy: nothing there yet, or the task
-# above just obtained a certificate. Running it on a steady-state converge would
-# execute --reloadcmd - acme.sh does that inline - and restart the consuming
-# service every time.
+# --install-cert records these paths and the reload command in the domain's
+# config, so the cron renewal re-copies the files and re-runs the command on its
+# own. It is therefore only run when there is something new to deploy: nothing
+# there yet, or the task above just obtained a certificate. Running it on a
+# steady-state converge would execute --reloadcmd - acme.sh does that inline -
+# and restart the consuming service every time.
 #
 # -d takes the first domain because that is the name acme.sh filed the
 # certificate under, and --ecc selects the EC state directory.
 - name: Install the acme_client certificate to its shared path
+  vars:
+    # --reloadcmd is always passed, never only when the operator sets one. acme.sh
+    # writes a fresh key as 0600 root:root whenever it has to create the file
+    # rather than overwrite it, and the renewal that does so runs from cron at
+    # 03:00 - the task below would not fix it again until the next converge, and
+    # a key its group cannot read is a consumer that crash-loops until then.
+    #
+    # The permission fix comes first, so an operator command that fails - a
+    # consumer that is not installed yet on a fresh host - still leaves the key
+    # readable. Keep double quotes out of acme_client_reload_command: the whole
+    # thing is one shell-quoted argument here.
+    _acme_client_reloadcmd: >-
+      chown root:{{ acme_client_key_group }} {{ acme_client_cert_dir }}/key.pem
+      && chmod 0640 {{ acme_client_cert_dir }}/key.pem
+      {{ '&& ' ~ acme_client_reload_command if acme_client_reload_command | length > 0 else '' }}
   ansible.builtin.command:
     cmd: >-
       /root/.acme.sh/acme.sh --install-cert
@@ -58,18 +73,17 @@
       --cert-file {{ acme_client_cert_dir }}/cert.pem
       --key-file {{ acme_client_cert_dir }}/key.pem
       --fullchain-file {{ acme_client_cert_dir }}/fullchain.pem
-      {% if acme_client_reload_command | length > 0 %}
-      --reloadcmd "{{ acme_client_reload_command }}"
-      {% endif %}
+      --reloadcmd "{{ _acme_client_reloadcmd }}"
   changed_when: true
   when:
     - acme_client_issue | bool
     - not acme_client_deployed.stat.exists or acme_client_issue_result is changed
 
-# acme.sh writes the key with the umask it inherits, and a key only root can read
-# means a container that bind-mounts it crash-loops on start - roles like gitea
-# assert readability by their own uid/gid before they render anything. acme.sh
-# preserves the mode of an existing file, so this survives renewals.
+# Second line of defence, and the one that applies a changed acme_client_key_group
+# without waiting for a renewal. A key only root can read means a container that
+# bind-mounts it crash-loops on start - roles like gitea assert readability by
+# their own uid/gid before they render anything. The --reloadcmd above covers the
+# unattended renewals; this covers the converges.
 - name: Restrict the acme_client private key
   ansible.builtin.file:
     path: "{{ acme_client_cert_dir }}/key.pem"

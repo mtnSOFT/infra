@@ -15,7 +15,8 @@ host, and renews it from cron. This is the service the other roles wait for:
   (default `/etc/ssl/acme/<first domain without the wildcard>/`), the path other
   roles point at
 - Adds a root cron job at 03:00 running `acme.sh --cron`, which renews what is
-  due, re-copies the files above and runs `acme_client_reload_command`
+  due, re-copies the files above, re-applies the key's `0640 root:<group>` and
+  runs `acme_client_reload_command`
 
 ## Gotchas
 
@@ -41,6 +42,13 @@ host, and renews it from cron. This is the service the other roles wait for:
   ```yaml
   acme_client_reload_command: "docker compose -f /containers/gitea/compose.yaml restart gitea"
   ```
+
+  The role always passes a `--reloadcmd`, whether or not you set one: it prefixes
+  yours with `chown root:<acme_client_key_group>` and `chmod 0640` on the key.
+  Two constraints follow. Use no double quotes in the value — the whole thing
+  becomes one shell-quoted argument. And acme.sh treats a failing reload as an
+  error, so on a fresh host, where this role runs before the consumer exists,
+  either leave it empty for the first converge or end it with `|| true`.
 
 - **A converge does not re-issue a valid certificate.** acme.sh renews only
   inside the renewal window and otherwise reports `Skipping. Next renewal time
@@ -76,6 +84,20 @@ host, and renews it from cron. This is the service the other roles wait for:
 - **The private key is `0640 root:{{ acme_client_key_group }}`**, not `0600
   root:root`, because a container that cannot read the key crash-loops on start.
   Set `acme_client_key_group` to the consumer's gid (gitea runs as `1000`).
+
+  It is applied in two places, which is deliberate. acme.sh writes a fresh key as
+  `0600 root:root` whenever it has to *create* the file rather than overwrite it,
+  and the renewal that does so runs unattended from cron — a converge-time task
+  alone would leave the consumer broken until someone next ran Ansible. So the
+  chown/chmod is also the first thing in the `--reloadcmd`, ahead of your restart,
+  and the task stays as the thing that applies a *changed* `acme_client_key_group`
+  without waiting for a renewal.
+
+  If the group looks wrong after a converge, check where you set the variable
+  before changing anything else — `1000` is a gitea number, and it belongs in
+  `group_vars/acme_client/`, not `group_vars/gitea/`. `ansible.cfg` sets
+  `no_log` globally, so run with `ANSIBLE_NO_LOG=false … -v` to see what the task
+  actually did.
 - **One certificate per host.** `acme_client_domains` is a flat list, all of it on
   one certificate. A host that needs two independent certificates is out of scope
   here.
@@ -99,8 +121,8 @@ host, and renews it from cron. This is the service the other roles wait for:
   wildcard stripped
 - `acme_client_key_group` — group that may read `key.pem` at `0640` (default
   `root`)
-- `acme_client_reload_command` — optional `--reloadcmd`, run by acme.sh after a
-  successful renewal (default empty)
+- `acme_client_reload_command` — appended to the key's chown/chmod in the
+  `--reloadcmd` acme.sh runs after a successful renewal (default empty)
 - `acme_client_force` — re-issue even when the certificate is still valid; a
   one-off `-e acme_client_force=true`, not a `group_vars` setting (default
   `false`)

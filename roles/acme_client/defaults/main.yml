@@ -45,12 +45,20 @@ acme_client_cert_dir: "/etc/ssl/acme/{{ acme_client_cert_name }}"
 # root:root key is unreadable to a container that bind-mounts it, and roles like
 # gitea assert readability by their own uid/gid before they start. Set this to
 # the consumer's gid (gitea uses 1000).
+#
+# Enforced twice on purpose: by a task during the converge, and by acme.sh's
+# --reloadcmd after every renewal, including the unattended ones from cron.
 acme_client_key_group: "root"
 
-# Optional --reloadcmd, run by acme.sh after a successful renewal. A bind-mounted
-# certificate file keeps pointing at the inode it was mounted from, so a consumer
-# only picks up a renewal when it is restarted, e.g.
+# Appended to the chown/chmod that acme.sh runs after a successful renewal. A
+# bind-mounted certificate file keeps pointing at the inode it was mounted from,
+# so a consumer only picks up a renewal when it is restarted, e.g.
 # "docker compose -f /containers/gitea/compose.yaml restart gitea".
+#
+# acme.sh treats a failing reload as an error, so on a fresh host - where this
+# role runs before the consumer exists - either leave it empty for the first
+# converge or make it tolerant with a trailing "|| true". No double quotes: the
+# command is passed to acme.sh as one shell-quoted argument.
 acme_client_reload_command: ""
 
 # Re-issue even when the current certificate is still valid. acme.sh skips a
