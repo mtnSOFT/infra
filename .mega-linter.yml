@@ -27,3 +27,9 @@ PYTHON_BANDIT_FILTER_REGEX_EXCLUDE: ^molecule?/
 
 # config is created during megalinter ci run and king fisher complains about credential in there
 REPOSITORY_KINGFISHER_ARGUMENTS: "--exclude .git/"
+
+# gitleaks defaults to `git log --all`, so every branch's run also scans every
+# other branch's commits - one secret on an unmerged branch turns CI red
+# everywhere. HEAD keeps the full history of the branch under test (on main,
+# all of main) while ignoring refs that branch does not contain.
+REPOSITORY_GITLEAKS_ARGUMENTS: "--log-opts=HEAD"
