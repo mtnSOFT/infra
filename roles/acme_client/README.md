@@ -2,8 +2,7 @@
 
 Issues one Let's Encrypt certificate with [acme.sh](https://acme.sh/) over a
 DNS-01 challenge against the Infomaniak API, deploys it to a stable path on the
-host, and renews it from cron. This is the service the other roles wait for:
-`gitea` and friends only ever mount a certificate, they never fetch one.
+host, and renews it from cron.
 
 ## What it does
 
@@ -74,10 +73,10 @@ host, and renews it from cron. This is the service the other roles wait for:
   away, run it once by hand:
 
   ```bash
-  /root/.acme.sh/acme.sh --install-cert --ecc -d '*.int.example.net' \
-    --cert-file /etc/ssl/acme/int.example.net/cert.pem \
-    --key-file /etc/ssl/acme/int.example.net/key.pem \
-    --fullchain-file /etc/ssl/acme/int.example.net/fullchain.pem \
+  /root/.acme.sh/acme.sh --install-cert --ecc -d '*.int.example.com' \
+    --cert-file /etc/ssl/acme/int.example.com/cert.pem \
+    --key-file /etc/ssl/acme/int.example.com/key.pem \
+    --fullchain-file /etc/ssl/acme/int.example.com/fullchain.pem \
     --reloadcmd "docker compose -f /containers/gitea/compose.yaml restart gitea"
   ```
 
@@ -128,7 +127,6 @@ host, and renews it from cron. This is the service the other roles wait for:
   `false`)
 - `acme_client_keylength` — key type (default `ec-256`)
 - `acme_client_version` — pinned acme.sh git tag (default `3.1.4`)
-- `acme_client_issue` — talk to the CA during the converge (default `true`)
 
 ## Usage
 
@@ -140,8 +138,8 @@ Targets the `acme_client` group. Configure it in `group_vars/acme_client/`:
 # vars.yml
 acme_client_email: "admin@example.com"
 acme_client_domains:
-  - "*.int.example.net"
-  - "*.lan.example.net"
+  - "*.int.example.com"
+  - "*.lan.example.com"
 acme_client_infomaniak_api_token: "{{ vault_acme_client_infomaniak_api_token }}"
 
 # The gid gitea's container reads the key as, plus the restart it needs after a
@@ -156,8 +154,8 @@ vault_acme_client_infomaniak_api_token: "..."
 Consumers then point at the deployed files, e.g. in `group_vars/gitea/vars.yml`:
 
 ```yaml
-gitea_tls_cert_file: "/etc/ssl/acme/int.example.net/fullchain.pem"
-gitea_tls_key_file: "/etc/ssl/acme/int.example.net/key.pem"
+gitea_tls_cert_file: "/etc/ssl/acme/int.example.com/fullchain.pem"
+gitea_tls_key_file: "/etc/ssl/acme/int.example.com/key.pem"
 ```
 
 Run this role before the roles that consume the certificate — they assert the
