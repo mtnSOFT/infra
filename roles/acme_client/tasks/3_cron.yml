@@ -1,0 +1,12 @@
+---
+# acme.sh --cron walks every certificate it knows about and renews the ones
+# inside their renewal window, then re-runs the --install-cert paths and the
+# --reloadcmd. Daily is what upstream ships; the CA decides when a renewal
+# actually happens.
+- name: Setup cron job for acme.sh renewal
+  ansible.builtin.cron:
+    name: "acme.sh renew certificates"
+    minute: "0"
+    hour: "3"
+    job: '/root/.acme.sh/acme.sh --cron --home "/root/.acme.sh" > /dev/null'
+    user: root

@@ -1,0 +1,12 @@
+---
+# Task files run in order. Tags let you run a subset, e.g. `--tags certificate`.
+# To add a task file, drop it in this folder and add an import below.
+
+- import_tasks: 1_install.yml
+  tags: [install]
+
+- import_tasks: 2_certificate.yml
+  tags: [certificate]
+
+- import_tasks: 3_cron.yml
+  tags: [cron]
