@@ -1,0 +1,31 @@
+# Configuration for gitleaks, picked up automatically by MegaLinter's gitleaks
+# linter and passed to it as `-c .gitleaks.toml`.
+#
+# MegaLinter strips gitleaks' default `--no-git` when the workspace is a git
+# repository, so the scan covers every commit rather than the working tree. A
+# false positive therefore cannot be retired by editing the offending file in a
+# later commit - the allowlist below is what clears it, for history too.
+#
+# Which history is scanned is set separately, by REPOSITORY_GITLEAKS_ARGUMENTS
+# in .mega-linter.yml: without it gitleaks walks `git log --all` and every
+# branch inherits every other branch's findings.
+
+[extend]
+# Keep the full upstream rule set; this file only adds allowlists on top of it.
+useDefault = true
+
+[[allowlists]]
+description = """
+SSH public keys. The base64 blob following the key type is public by design -
+it is what a host advertises as its host key and what known_hosts and
+authorized_keys are made of - but its entropy trips generic-api-key as soon as
+it is assigned to a constant such as HOST_KEY. Matching is anchored on the key
+type headers, which introduce public keys only: an OpenSSH *private* key is PEM
+wrapped and stays covered by the private-key rule.
+"""
+regexTarget = "secret"
+regexes = [
+  '''^AAAAC3NzaC1lZDI1NTE5[0-9A-Za-z+/=]*$''',           # ssh-ed25519
+  '''^AAAAB3NzaC1yc2E[0-9A-Za-z+/=]*$''',                # ssh-rsa
+  '''^AAAAE2VjZHNhLXNoYTItbmlzdHA[0-9A-Za-z+/=]*$''',    # ecdsa-sha2-nistp*
+]
