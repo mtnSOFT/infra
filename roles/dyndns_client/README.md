@@ -21,7 +21,7 @@ polling their dyndns2 endpoint from a root cron job.
 
 - **The credential is per Dynamic DNS entry, not an account login.** Create the
   entry and its ID/password pair in the Infomaniak manager under the domain's
-  **Dynamic DNS** section. 
+  **Dynamic DNS** section.
 - **Keep the ID and password alphanumeric.** Infomaniak recommends it, and it is
   also what keeps the pair safe in a basic-auth header with no escaping. The role
   does no URL- or shell-encoding of either.
