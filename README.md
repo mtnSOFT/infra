@@ -21,7 +21,7 @@ directory structure:
 |--------------------------------------------------|----------------------------------------------------------------------------|
 | [acme_client](roles/acme_client/README.md)       | Let's Encrypt certificates via acme.sh + Infomaniak DNS-01                 |
 | [docker-compose](roles/docker-compose/README.md) | Docker Engine + Compose plugin from the official apt repo                  |
-| [dyndns_client](roles/dyndns_client/README.md)   | Keeps a dynamic DNS record up to date via cron                             |
+| [dyndns_client](roles/dyndns_client/README.md)   | Keeps a dynamic DNS record up to date at Infomaniak via cron               |
 | [gitea](roles/gitea/README.md)                   | Gitea self-hosted git service as a Docker Compose stack                    |
 | [k3s](roles/k3s/README.md)                       | k3s Kubernetes cluster with cert-manager + ArgoCD                          |
 | [linux_base](roles/linux_base/README.md)         | Base configuration + first-run bootstrap for every host                    |

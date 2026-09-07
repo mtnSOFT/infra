@@ -1,0 +1,29 @@
+---
+# All three reach the rendered files, so none of them has a usable default: an
+# empty hostname makes the endpoint answer "nohost" on every run, and an empty
+# credential makes it answer "badauth". Caught here rather than in the log file of
+# an unattended cron run.
+- name: Validate the dyndns_client settings
+  ansible.builtin.assert:
+    that:
+      - dyndns_client_hostname | length > 0
+      - dyndns_client_username | length > 0
+      - dyndns_client_password | length > 0
+    fail_msg: >-
+      dyndns_client_hostname, dyndns_client_username and dyndns_client_password
+      must all be set. Got hostname={{ dyndns_client_hostname }},
+      username={{ dyndns_client_username }},
+      password_set={{ dyndns_client_password | length > 0 }}.
+  # ansible.cfg turns no_log on for every task, which would censor the message
+  # that makes this failure actionable. The password itself is not in it.
+  no_log: false
+
+# curl because the script shells out to it, cron because ansible.builtin.cron
+# needs a crontab binary. linux_base already installs cron on a real host, but the
+# molecule container runs this role on its own.
+- name: Install the dyndns_client packages
+  ansible.builtin.apt:
+    name:
+      - curl
+      - cron
+    state: present

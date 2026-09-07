@@ -1,0 +1,48 @@
+---
+# 0700: the directory holds the basic-auth credential and nothing else needs to
+# look inside it.
+- name: Create the dyndns_client configuration directory
+  ansible.builtin.file:
+    path: "{{ dyndns_client_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+# The credential lives here instead of in the script so it never reaches curl's
+# command line, where any local user would see it in ps output. curl --config
+# reads the same syntax as its long options.
+- name: Render the dyndns_client curl credentials
+  ansible.builtin.template:
+    src: curl.conf.j2
+    dest: "{{ dyndns_client_config_dir }}/curl.conf"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Create the dyndns_client update script
+  ansible.builtin.template:
+    src: update-dyndns.sh.j2
+    dest: /usr/local/bin/update-dyndns.sh
+    owner: root
+    group: root
+    mode: "0700"
+
+# Puts the record right away rather than up to dyndns_client_cron_minute later,
+# and - the reason it is here - fails the play on a wrong credential instead of
+# leaving a badauth for the unattended cron runs to write to the log.
+#
+# changed_when: false because a poll that reports "no_change" changed nothing;
+# reporting it as changed would make every converge of this role look dirty.
+- name: Update the dyndns_client record now
+  ansible.builtin.command:
+    cmd: /usr/local/bin/update-dyndns.sh
+  changed_when: false
+  # ansible.cfg turns no_log on for every task, which would report a failure here
+  # as censored output - throwing away the "credentials rejected" line that is the
+  # entire reason this task runs. The script prints the provider's response and
+  # nothing else; the credential reaches curl through curl.conf, not through this
+  # command line or its output.
+  no_log: false
+  when: dyndns_client_update | bool

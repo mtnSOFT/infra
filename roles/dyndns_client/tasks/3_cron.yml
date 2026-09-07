@@ -1,0 +1,18 @@
+---
+# ansible.builtin.cron keys an entry on its name, which it writes to the crontab as
+# an "#Ansible: <name>" comment. The netzone-era job was named after the provider,
+# so the rename below would leave that entry in place and hosts converged before
+# this change would keep polling on the old schedule as well. Removed by its old
+# name; harmless on a host that never had it.
+- name: Remove the netzone-era dyndns_client cron job
+  ansible.builtin.cron:
+    name: "Update netzone.ch DynDNS"
+    state: absent
+    user: root
+
+- name: Setup cron job for dyndns_client updates
+  ansible.builtin.cron:
+    name: "dyndns_client update"
+    minute: "{{ dyndns_client_cron_minute }}"
+    job: "/usr/local/bin/update-dyndns.sh"
+    user: root

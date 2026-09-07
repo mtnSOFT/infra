@@ -1,0 +1,6 @@
+# Ansible managed - DO NOT EDIT MANUALLY
+#
+# Infomaniak DynDNS basic-auth credential, read by `curl --config`. This file
+# exists so the credential never appears on curl's command line, where any local
+# user could read it out of ps. Same syntax as curl's long options.
+user = "{{ dyndns_client_username }}:{{ dyndns_client_password }}"

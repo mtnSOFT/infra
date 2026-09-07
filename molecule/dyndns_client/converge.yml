@@ -1,0 +1,11 @@
+---
+# Test values live in inventories/test/group_vars/dyndns_clients/, where
+# dyndns_client_update is false - so nothing is sent to Infomaniak and the
+# credential in the vault file next to it is never accepted anywhere. The
+# scenario covers the rendered script, the credentials file and the cron job,
+# which is everything that does not need the provider.
+- name: Converge
+  hosts: dyndns_clients
+  become: true
+  roles:
+    - role: dyndns_client

@@ -1,22 +1,80 @@
 #!/bin/bash
-# DynDNS update script
+# Infomaniak DynDNS update
 # Managed by Ansible - DO NOT EDIT MANUALLY
+#
+# Runs from root's crontab and, once, from the converge. Exits non-zero on
+# anything that is not a successful update, which is what makes cron mail root
+# instead of burying the failure in the log file.
+#
+# `set -e` is deliberately absent: a curl failure has to reach the logging and
+# classification block below rather than abort the script before it writes
+# anything. Its exit status is captured explicitly instead.
+set -uo pipefail
 
-DYNDNS_URL="{{ dyndns_server }}"
-HOSTNAME="{{ dyndns_hostname }}"
-USERNAME="{{ dyndns_username }}"
-PASSWORD="{{ dyndns_password }}"
-LOG_FILE="/var/log/dyndns_update.log"
+CONFIG_FILE="{{ dyndns_client_config_dir }}/curl.conf"
+DYNDNS_HOSTNAME="{{ dyndns_client_hostname }}"
+LOG_FILE="{{ dyndns_client_log_file }}"
 
-# Build the full URL
-FULL_URL="${DYNDNS_URL}?hn=${HOSTNAME}&u=${USERNAME}&pw=${PASSWORD}"
+# --ipv4 is load-bearing: Infomaniak picks the record type from the protocol the
+# request arrives over, so on a host with working IPv6 curl would update the AAAA
+# record instead of the A record this script is about.
+#
+# `myip` is deliberately not sent - Infomaniak then uses the request's source
+# address, which behind NAT is the public one this host is actually seen as. That
+# is why nothing here has to ask an external service what that address is.
+#
+# --fail is deliberately not used either: badauth and nohost come back as HTTP 400
+# bodies, and --fail would discard the body - the one string that says which of
+# the two it was.
+STDERR_FILE=$(mktemp)
+RESPONSE=$(curl --silent --show-error --ipv4 \
+  --config "$CONFIG_FILE" \
+  --max-time 30 --retry 2 --retry-delay 5 \
+  --write-out '\n%{http_code}' \
+  "{{ dyndns_client_update_url }}?hostname=${DYNDNS_HOSTNAME}" 2>"$STDERR_FILE")
+CURL_RC=$?
+CURL_ERROR=$(tr '\n' ' ' <"$STDERR_FILE")
+rm -f "$STDERR_FILE"
 
-# Make the request
-RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}\nTIME:%{time_total}s" "$FULL_URL")
-TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
+# --write-out appended the status code on its own line, so the body is everything
+# before it. A curl that never reached the server still reports a code, 000.
+HTTP_CODE=$(printf '%s' "$RESPONSE" | tail -n 1)
+BODY=$(printf '%s' "$RESPONSE" | sed '$d')
 
-echo "[$TIMESTAMP] $RESPONSE" >> "$LOG_FILE"
+# dyndns2 responses carry the accepted address after the keyword, e.g.
+# "no_change 198.51.100.7". successfully_changed/no_change are what Infomaniak
+# sends today; good/nochg are the legacy spellings it still answers with.
+if [ "$CURL_RC" -ne 0 ]; then
+  RESULT="failed: curl rc=${CURL_RC} ${CURL_ERROR}"
+else
+  case "$BODY" in
+  successfully_changed | "successfully_changed "*) RESULT="updated" ;;
+  no_change | "no_change "*) RESULT="unchanged" ;;
+  good | "good "*) RESULT="updated" ;;
+  nochg | "nochg "*) RESULT="unchanged" ;;
+  badauth*) RESULT="failed: credentials rejected" ;;
+  nohost*) RESULT="failed: no dyndns entry for ${DYNDNS_HOSTNAME}" ;;
+  notfqdn*) RESULT="failed: ${DYNDNS_HOSTNAME} is not a fqdn" ;;
+  abuse*) RESULT="failed: blocked for abuse" ;;
+  *) RESULT="failed: unrecognised response" ;;
+  esac
+fi
 
-tail -n 1000 "$LOG_FILE" > "$LOG_FILE.tmp" && mv "$LOG_FILE.tmp" "$LOG_FILE"
+printf '[%s] %s (http %s) %s\n' \
+  "$(date '+%Y-%m-%d %H:%M:%S')" "$RESULT" "$HTTP_CODE" "$BODY" >>"$LOG_FILE"
+
+# Keeps the log bounded without a logrotate entry of its own.
+if tail -n 1000 "$LOG_FILE" >"$LOG_FILE.tmp"; then
+  mv "$LOG_FILE.tmp" "$LOG_FILE"
+fi
+
+case "$RESULT" in
+failed*)
+  # Goes to stderr as well as to the log: this is the copy cron mails to root.
+  printf 'dyndns update for %s %s (http %s) %s\n' \
+    "$DYNDNS_HOSTNAME" "$RESULT" "$HTTP_CODE" "$BODY" >&2
+  exit 1
+  ;;
+esac
 
 exit 0
