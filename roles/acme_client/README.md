@@ -85,11 +85,11 @@ host, and renews it from cron.
   Set `acme_client_key_group` to the consumer's gid (gitea runs as `1000`).
 
   It is applied in two places, which is deliberate. acme.sh writes a fresh key as
-  `0600 root:root` whenever it has to *create* the file rather than overwrite it,
+  `0600 root:root` whenever it has to _create_ the file rather than overwrite it,
   and the renewal that does so runs unattended from cron — a converge-time task
   alone would leave the consumer broken until someone next ran Ansible. So the
   chown/chmod is also the first thing in the `--reloadcmd`, ahead of your restart,
-  and the task stays as the thing that applies a *changed* `acme_client_key_group`
+  and the task stays as the thing that applies a _changed_ `acme_client_key_group`
   without waiting for a renewal.
 
   If the group looks wrong after a converge, check where you set the variable
