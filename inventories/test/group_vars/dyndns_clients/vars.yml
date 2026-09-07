@@ -1,4 +1,12 @@
-dyndns_username: "dyndns-alice"
-dyndns_server: "dyndns.example.com"
-dyndns_password: "{{ vault_ddclient_password }}"
-dyndns_hostname: "dynhost.alice.example.com"
+---
+# The test container has no Infomaniak Dynamic DNS entry and no credential that
+# would be accepted, so the converge does not call the provider - the scenario
+# verifies the rendered script, the 0600 credentials file and the cron job.
+dyndns_client_update: false
+
+# .example.com is reserved, so even a mis-gated converge could not update a real
+# record. dyndns_client_update_url is left at its default on purpose: the tests
+# assert the role points at Infomaniak without the inventory saying so.
+dyndns_client_hostname: "dynhost.alice.example.com"
+dyndns_client_username: "dyndns-alice"
+dyndns_client_password: "{{ vault_dyndns_client_password }}"

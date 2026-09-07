@@ -18,3 +18,6 @@ testhost-ubuntu-24.04
 
 [acme_client]
 testhost-ubuntu-24.04
+
+[dyndns_clients]
+testhost-ubuntu-24.04

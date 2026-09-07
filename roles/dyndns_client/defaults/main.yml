@@ -1,0 +1,45 @@
+---
+# Infomaniak's dyndns2 endpoint. HTTPS is mandatory and the path is fixed; this is
+# a variable only so a test or a provider migration can point the script somewhere
+# else without editing the template. The credentials are not in here - they go to
+# curl through a separate 0600 file, see dyndns_client_config_dir below.
+dyndns_client_update_url: "https://infomaniak.com/nic/update"
+
+# The FQDN whose A record is kept current, e.g. "dyn.example.com". Must match a
+# Dynamic DNS entry that already exists under Domain -> Dynamic DNS in the
+# Infomaniak manager - the endpoint answers "nohost" for anything else, it does
+# not create records. Empty is a configuration error: 1_install fails on it.
+dyndns_client_hostname: ""
+
+# The ID/password pair of that Dynamic DNS entry, not an Infomaniak account login
+# and not the acme_client API token. Infomaniak issues one pair per entry and
+# recommends letters and digits only, which is also what keeps the pair safe to
+# put in a URL-free basic-auth header without any escaping.
+#
+# The password comes from vault; leave the default empty so a missing vault
+# variable fails the assert instead of rendering an empty credential.
+dyndns_client_username: ""
+dyndns_client_password: ""
+
+# Run the update once during the converge, on top of the cron schedule. On a real
+# host this is what surfaces a wrong credential immediately - the cron runs are
+# unattended, so without it a badauth would only ever be visible in the log file.
+# false in molecule: the test container has no Infomaniak credentials.
+dyndns_client_update: true
+
+# Cron schedule of the unattended updates, as the minute field of a job that runs
+# every hour of every day. Every 5 minutes is 288 requests a day against an
+# endpoint whose documentation warns about abuse; that is deliberate - the script
+# sends no myip and therefore cannot know the address changed without asking - but
+# widen this if the host's address is stable.
+dyndns_client_cron_minute: "*/5"
+
+# Holds curl.conf, which carries the basic-auth credential and is 0600 root:root.
+# The credential is kept out of the script - and out of the curl command line -
+# because arguments are visible to any local user in ps output.
+dyndns_client_config_dir: "/etc/dyndns-client"
+
+# Every run appends one timestamped line here and the file is trimmed to its last
+# 1000 lines, so it needs no logrotate entry. Kept at the path the netzone-era
+# script used, so history survives the provider switch.
+dyndns_client_log_file: "/var/log/dyndns_update.log"
