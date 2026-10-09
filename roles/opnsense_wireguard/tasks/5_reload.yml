@@ -1,0 +1,11 @@
+---
+# Every step above stages its change with reload: false, so WireGuard is
+# reloaded once here. default({}) covers steps skipped by --tags.
+- name: Reload WireGuard
+  oxlorg.opnsense.reload:
+    target: wireguard
+    api_timeout: "{{ opnsense_wireguard_reload_timeout }}"
+  when: >-
+    (_opnsense_wireguard_peers_result | default({})) is changed
+    or (_opnsense_wireguard_server_result | default({})) is changed
+    or (_opnsense_wireguard_general_result | default({})) is changed

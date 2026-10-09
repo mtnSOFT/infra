@@ -1,0 +1,12 @@
+---
+# Client configs reference the server by its public key.
+- name: Hand the instance public key to wireguard_clients
+  ansible.builtin.set_fact:
+    wireguard_server_public_key: "{{ opnsense_wireguard_public_key }}"
+
+# Reads (or creates) each client's keys from its vaulted config and returns
+# them in wireguard_clients_peers. Censored: the results carry private keys.
+- name: Create client configs
+  ansible.builtin.import_role:
+    name: wireguard_clients
+  no_log: true

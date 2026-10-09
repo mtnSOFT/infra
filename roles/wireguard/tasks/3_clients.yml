@@ -1,27 +1,21 @@
 ---
-- name: Load common wireguard facts
-  include_tasks: "facts.yml"
+# Loaded here too, so `--tags clients` works without the server-config step.
+- name: Load the server keys
+  include_tasks: "process-server-keys.yml"
 
-- name: Set local_user
-  ansible.builtin.set_fact:
-    local_user: "{{ lookup('env', 'USER') }}"
+# Client keys and the vaulted client configs - shared with opnsense_wireguard.
+- name: Create client configs
+  ansible.builtin.import_role:
+    name: wireguard_clients
 
-- name: Set local_wireguard_client_config_dir
-  ansible.builtin.set_fact:
-    local_wireguard_client_config_dir: "{{ local_wireguard_config_dir }}/clients"
-
-- name: Make sure client config directory exists for given inventory
-  delegate_to: localhost
-  ansible.builtin.file:
-    path: "{{ local_wireguard_client_config_dir }}"
-    state: directory
-    mode: "0700"
-    owner: "{{ local_user }}"
-    group: "{{ local_user }}"
-  changed_when: false
-
-- name: Create client config files
-  include_tasks: "create-client-config.yml"
+- name: Append peer config to server config
+  ansible.builtin.blockinfile:
+    path: /etc/wireguard/{{ wireguard_interface }}.conf
+    block: "{{ lookup('template', 'client-peer-section.conf.j2') }}"
+    marker: "# {mark} peer {{ peer.name }}"
+    insertafter: EOF
+  loop: "{{ wireguard_clients_peers }}"
   loop_control:
-    loop_var: client
-  loop: "{{ wireguard_client_peers }}"
+    loop_var: peer
+    label: "{{ peer.name }}"
+  changed_when: false

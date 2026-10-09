@@ -81,10 +81,16 @@ jobs:
             emit "$all_json"; exit 0
           fi
 
-          # Otherwise: a scenario runs if its role or its molecule scenario changed.
+          # Roles a scenario's role pulls in, which have no scenario of their own.
+          declare -A DEPS=([wireguard]="wireguard_clients")
+
+          # Otherwise: a scenario runs if its role, a role it depends on, or its
+          # molecule scenario changed.
           selected=()
           for name in "${ALL[@]}"; do
-            if echo "$changed" | grep -qE "^(roles/${name}/|molecule/${name}/)"; then
+            roles="$name"
+            for dep in ${DEPS[$name]:-}; do roles="$roles|$dep"; done
+            if echo "$changed" | grep -qE "^(roles/(${roles})/|molecule/${name}/)"; then
               selected+=("$name")
             fi
           done
