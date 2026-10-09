@@ -1,0 +1,37 @@
+---
+# Unbound has no *_multi module and no purge: dropping an entry from the list
+# leaves it on the firewall - set `state: absent` on it to remove it.
+- name: Manage host overrides
+  oxlorg.opnsense.unbound_host:
+    hostname: "{{ item.hostname }}"
+    domain: "{{ item.domain }}"
+    record_type: "{{ item.record_type }}"
+    value: "{{ item.value | default(omit) }}"
+    prio: "{{ item.prio | default(omit) }}"
+    description: "{{ item.description }}"
+    enabled: "{{ item.enabled | default(omit) }}"
+    state: "{{ item.state }}"
+    # The default match fields include `value`, so a changed address would
+    # create a second override instead of updating the first.
+    match_fields: [description]
+    reload: false
+  loop: "{{ _opnsense_dns_hosts }}"
+  loop_control:
+    label: "{{ item.description }}"
+  register: _opnsense_dns_hosts_result
+
+# After the hosts: an alias must point at an existing override.
+- name: Manage host aliases
+  oxlorg.opnsense.unbound_host_alias:
+    alias: "{{ item.alias }}"
+    domain: "{{ item.domain }}"
+    target: "{{ item.target | default(omit, true) }}"
+    description: "{{ item.description }}"
+    enabled: "{{ item.enabled | default(omit) }}"
+    state: "{{ item.state }}"
+    match_fields: [description]
+    reload: false
+  loop: "{{ _opnsense_dns_aliases }}"
+  loop_control:
+    label: "{{ item.description }} -> {{ item.target }}"
+  register: _opnsense_dns_aliases_result

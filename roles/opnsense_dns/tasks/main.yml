@@ -1,0 +1,46 @@
+---
+# Task files run in order. Tags let you run a subset, e.g. `--tags hosts`.
+# To add a task file, drop it in this folder and add an import below.
+
+- name: Configure Unbound DNS on OPNsense through its API
+  # Every oxlorg.opnsense module needs the same connection args.
+  module_defaults:
+    group/oxlorg.opnsense.all:
+      firewall: "{{ opnsense_dns_api_host }}"
+      api_port: "{{ opnsense_dns_api_port }}"
+      api_key: "{{ opnsense_dns_api_key }}"
+      api_secret: "{{ opnsense_dns_api_secret }}"
+      ssl_verify: "{{ opnsense_dns_ssl_verify }}"
+      # Without the CA file the system trust store is used.
+      ssl_ca_file: "{{ opnsense_dns_ssl_ca_file if opnsense_dns_ssl_ca_file is file else omit }}"
+  # ansible.cfg censors everything by default, which would hide failing asserts
+  # and the diffs. The modules mark api_key/api_secret no_log themselves.
+  no_log: false
+  block:
+    # Builds the record lists the later steps use, so it always runs.
+    - import_tasks: 1_validate.yml
+      tags: [validate, always]
+
+    - import_tasks: 2_general.yml
+      tags: [general]
+
+    - import_tasks: 3_hosts.yml
+      tags: [hosts]
+
+    - import_tasks: 4_forwards.yml
+      tags: [forwards]
+
+    - import_tasks: 5_acls.yml
+      tags: [acls]
+
+    - import_tasks: 6_reload.yml
+      tags: [always]
+
+  # checkov (CKV2_ANSIBLE_3) wants a rescue, and its inline skip does not work on
+  # blocks. Re-fail so the play still aborts; `always` keeps it running under
+  # --tags, otherwise a filtered run would swallow the error.
+  rescue:
+    - name: Fail after Unbound DNS configuration error
+      ansible.builtin.fail:
+        msg: "Unbound DNS configuration failed on {{ inventory_hostname }}, see the failed task above."
+      tags: [always]

@@ -1,0 +1,24 @@
+---
+# Single settings object - only touched when opnsense_dns_general is set.
+- name: Manage Unbound general settings
+  oxlorg.opnsense.unbound_general:
+    enabled: "{{ opnsense_dns_general.enabled | default(omit) }}"
+    port: "{{ opnsense_dns_general.port | default(omit) }}"
+    interfaces: "{{ opnsense_dns_general.interfaces | default(omit) }}"
+    outgoing_interfaces: "{{ opnsense_dns_general.outgoing_interfaces | default(omit) }}"
+    dnssec: "{{ opnsense_dns_general.dnssec | default(omit) }}"
+    register_dhcp_leases: "{{ opnsense_dns_general.register_dhcp_leases | default(omit) }}"
+    dhcp_domain: "{{ opnsense_dns_general.dhcp_domain | default(omit) }}"
+    register_dhcp_static_mappings: "{{ opnsense_dns_general.register_dhcp_static_mappings | default(omit) }}"
+    register_ipv6_link_local: "{{ opnsense_dns_general.register_ipv6_link_local | default(omit) }}"
+    register_system_records: "{{ opnsense_dns_general.register_system_records | default(omit) }}"
+    txt_records: "{{ opnsense_dns_general.txt_records | default(omit) }}"
+    flush_dns_cache: "{{ opnsense_dns_general.flush_dns_cache | default(omit) }}"
+    local_zone_type: "{{ opnsense_dns_general.local_zone_type | default(omit) }}"
+    dns64: "{{ opnsense_dns_general.dns64 | default(omit) }}"
+    dns64_prefix: "{{ opnsense_dns_general.dns64_prefix | default(omit) }}"
+    aaaa_only_mode: "{{ opnsense_dns_general.aaaa_only_mode | default(omit) }}"
+    wpad: "{{ opnsense_dns_general.wpad | default(omit) }}"
+    reload: false
+  register: _opnsense_dns_general_result
+  when: opnsense_dns_general | length > 0

@@ -1,0 +1,14 @@
+---
+- name: Manage access lists
+  oxlorg.opnsense.unbound_acl:
+    name: "{{ item.name }}"
+    action: "{{ item.action | default(omit) }}"
+    networks: "{{ item.networks | default(omit) }}"
+    description: "{{ item.description | default(omit) }}"
+    enabled: "{{ item.enabled | default(omit) }}"
+    state: "{{ item.state | default(omit) }}"
+    reload: false
+  loop: "{{ opnsense_dns_acls }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: _opnsense_dns_acls_result

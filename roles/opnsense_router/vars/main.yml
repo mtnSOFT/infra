@@ -1,0 +1,6 @@
+---
+# Fixed location of the CA that signed the firewall's web certificate, on the
+# controller next to the host's other host_vars. Ansible only loads .yml/.yaml/
+# .json (and extensionless) files from there, so the .pem is left alone. Used
+# only if the file exists - a publicly trusted certificate needs no CA file.
+opnsense_router_ssl_ca_file: "{{ inventory_dir }}/host_vars/{{ inventory_hostname }}/opnsense_ca.pem"

@@ -1,0 +1,31 @@
+---
+- name: Validate OPNsense API credentials
+  ansible.builtin.assert:
+    that:
+      - opnsense_router_api_key is defined
+      - opnsense_router_api_secret is defined
+      - opnsense_router_api_key | length > 0
+      - opnsense_router_api_secret | length > 0
+    fail_msg: >-
+      Set opnsense_router_api_key and opnsense_router_api_secret (from the vault)
+      for {{ inventory_hostname }} - see the Bootstrap section of the role README.
+    quiet: true
+
+# NAT and filter rules are matched by description, so an entry without one (or
+# two with the same) would be created again on every run instead of updated.
+- name: Validate NAT and filter rule descriptions
+  ansible.builtin.assert:
+    that:
+      - item.entries | rejectattr('description', 'defined') | list | length == 0
+      - item.entries | map(attribute='description') | unique | length == item.entries | length
+    fail_msg: >-
+      Every {{ item.var }} entry needs a unique `description`.
+      Got: {{ item.entries | map(attribute='description', default='<missing>') | list }}.
+    quiet: true
+  loop:
+    - var: opnsense_router_nat_source
+      entries: "{{ opnsense_router_nat_source }}"
+    - var: opnsense_router_rules
+      entries: "{{ opnsense_router_rules }}"
+  loop_control:
+    label: "{{ item.var }}"
