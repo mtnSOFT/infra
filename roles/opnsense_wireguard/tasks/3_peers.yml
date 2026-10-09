@@ -1,0 +1,12 @@
+---
+- name: Manage WireGuard peers
+  oxlorg.opnsense.wireguard_peer:
+    name: "{{ item.name }}"
+    public_key: "{{ item.public_key }}"
+    psk: "{{ item.preshared_key }}"
+    allowed_ips: ["{{ item.ip }}"]
+    reload: false
+  loop: "{{ wireguard_clients_peers }}"
+  loop_control:
+    label: "{{ item.name }} ({{ item.ip }})"
+  register: _opnsense_wireguard_peers_result

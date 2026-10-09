@@ -1,0 +1,69 @@
+---
+- name: Validate WireGuard client inputs
+  ansible.builtin.assert:
+    that:
+      - wireguard_server_public_key is defined
+      - wireguard_server_public_key | length > 0
+      - wireguard_endpoint is defined
+      - wireguard_allowed_lan_ips is defined
+      - wireguard_client_peers | rejectattr('name', 'defined') | list | length == 0
+      - wireguard_client_peers | rejectattr('ip', 'defined') | list | length == 0
+    fail_msg: >-
+      wireguard_clients needs wireguard_server_public_key (set by the calling
+      role), wireguard_endpoint, wireguard_allowed_lan_ips, and a `name` and
+      `ip` for every wireguard_client_peers entry.
+    quiet: true
+  # Callers may censor this role (it handles private keys); this has none.
+  no_log: false
+
+- name: Set local_wireguard_config_dir
+  ansible.builtin.set_fact:
+    local_wireguard_config_dir: "{{ inventory_dir }}/wireguard_configs"
+  when: local_wireguard_config_dir is not defined
+
+- name: Set local_user
+  ansible.builtin.set_fact:
+    local_user: "{{ lookup('env', 'USER') }}"
+
+- name: Set local_wireguard_client_config_dir
+  ansible.builtin.set_fact:
+    local_wireguard_client_config_dir: "{{ local_wireguard_config_dir }}/clients"
+
+- name: Make sure client config directory exists for given inventory
+  delegate_to: localhost
+  ansible.builtin.file:
+    path: "{{ local_wireguard_client_config_dir }}"
+    state: directory
+    mode: "0700"
+    owner: "{{ local_user }}"
+    group: "{{ local_user }}"
+  changed_when: false
+
+# Output for the calling role: [{name, ip, public_key, preshared_key}], one
+# entry per client, filled by create-client-config.yml.
+- name: Start with an empty peer list
+  ansible.builtin.set_fact:
+    wireguard_clients_peers: []
+
+# Tags don't reach into a dynamic include: `apply` makes the per-client tasks
+# run whenever this include is selected, e.g. by the caller's --tags.
+- name: Create client config files
+  ansible.builtin.include_tasks:
+    file: create-client-config.yml
+    apply:
+      tags: [always]
+  loop_control:
+    loop_var: client
+  loop: "{{ wireguard_client_peers }}"
+
+# Callers link exactly these peers to the server - a short list would unlink
+# the missing clients, so never hand one back.
+- name: Check that every client made it into the peer list
+  ansible.builtin.assert:
+    that:
+      - wireguard_clients_peers | length == wireguard_client_peers | length
+    fail_msg: >-
+      Built {{ wireguard_clients_peers | length }} of
+      {{ wireguard_client_peers | length }} client peers.
+    quiet: true
+  no_log: false

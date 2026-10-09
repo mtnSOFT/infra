@@ -1,0 +1,27 @@
+---
+# Same names and defaults as the wireguard role, so one set of inventory
+# variables drives both the server and its client configs.
+
+# Prefix of the client config filenames: vpn-<company>-{all,lan}.conf
+wireguard_company: "acme"
+
+# Listen port the clients connect to (Endpoint = <wireguard_endpoint>:<port>)
+wireguard_port: 51820
+
+# Clients to generate configs for
+wireguard_client_peers: []
+# Example:
+# wireguard_client_peers:
+#   - name: "alice"
+#     ip: "10.10.0.2/32"
+
+# DNS servers pushed to clients (optional)
+wireguard_dns_servers: [10.10.0.1]
+
+# MTU (optional)
+wireguard_mtu: ""
+
+# Required, no default:
+# wireguard_endpoint: vpn.example.com          # public name or IP of the server
+# wireguard_allowed_lan_ips: "10.10.0.1/32, 192.168.0.0/24"  # split-tunnel routes
+# wireguard_server_public_key: set by the calling role, not in inventory
