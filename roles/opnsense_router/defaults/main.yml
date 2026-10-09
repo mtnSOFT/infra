@@ -18,24 +18,6 @@ opnsense_router_api_port: 443
 # a proper one, or - only while bootstrapping - turn ssl_verify off.
 opnsense_router_ssl_verify: true
 
-# --- Interfaces ---------------------------------------------------------------
-# Interface *assignment* (which NIC is wan/lan/optX) is not possible through the
-# API - do it on the console during bootstrap. These create the devices on top.
-# Every key is the oxlorg.opnsense.interface_vlan / interface_vip parameter name.
-opnsense_router_vlans: []
-# Example:
-# opnsense_router_vlans:
-#   - description: servers
-#     interface: vtnet1   # parent NIC
-#     vlan: 20
-
-opnsense_router_vips: []
-# Example:
-# opnsense_router_vips:
-#   - address: 10.0.0.2/24
-#     interface: lan
-#     description: secondary LAN address
-
 # --- Routing ------------------------------------------------------------------
 # Gateways first, routes reference them by name (oxlorg.opnsense.gateway / route).
 opnsense_router_gateways: []

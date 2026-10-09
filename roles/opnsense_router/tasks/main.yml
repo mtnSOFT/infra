@@ -3,7 +3,6 @@
 # To add a task file, drop it in this folder and add an import below.
 
 - name: Configure OPNsense through its API
-  # checkov:skip=CKV2_ANSIBLE_3:The block only scopes module_defaults/no_log; failures must abort the play, not be rescued.
   # Every oxlorg.opnsense module needs the same connection args.
   module_defaults:
     group/oxlorg.opnsense.all:
@@ -21,17 +20,23 @@
     - import_tasks: 1_validate.yml
       tags: [validate]
 
-    - import_tasks: 2_interfaces.yml
-      tags: [interfaces]
-
-    - import_tasks: 3_routing.yml
+    - import_tasks: 2_routing.yml
       tags: [routing]
 
-    - import_tasks: 4_aliases.yml
+    - import_tasks: 3_aliases.yml
       tags: [aliases]
 
-    - import_tasks: 5_nat.yml
+    - import_tasks: 4_nat.yml
       tags: [nat]
 
-    - import_tasks: 6_rules.yml
+    - import_tasks: 5_rules.yml
       tags: [rules]
+
+  # checkov (CKV2_ANSIBLE_3) wants a rescue, and its inline skip does not work on
+  # blocks. Re-fail so the play still aborts; `always` keeps it running under
+  # --tags, otherwise a filtered run would swallow the error.
+  rescue:
+    - name: Fail after OPNsense configuration error
+      ansible.builtin.fail:
+        msg: "OPNsense configuration failed on {{ inventory_hostname }}, see the failed task above."
+      tags: [always]

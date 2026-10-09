@@ -1,7 +1,7 @@
 # opnsense_router
 
 Configures an [OPNsense](https://opnsense.org/) firewall as the network's router:
-interfaces, gateways and static routes, aliases, outbound NAT and filter rules.
+gateways and static routes, aliases, outbound NAT and filter rules.
 It uses the [oxlorg.opnsense](https://ansible-opnsense.oxl.app/) collection, which
 talks to the OPNsense REST API **from the controller**. Nothing runs on the
 firewall over SSH.
@@ -10,12 +10,11 @@ firewall over SSH.
 
 1. **validate**: asserts that the API credentials are set and that every NAT and
    filter rule has a unique `description`
-2. **interfaces**: VLAN devices and virtual IPs
-3. **routing**: gateways, then the static routes that use them
-4. **aliases**: firewall aliases (named networks, hosts and ports) for rules to
+2. **routing**: gateways, then the static routes that use them
+3. **aliases**: firewall aliases (named networks, hosts and ports) for rules to
    reference
-5. **nat**: extra outbound (source) NAT rules
-6. **rules**: filter rules, in Firewall › Automation › Filter
+4. **nat**: extra outbound (source) NAT rules
+5. **rules**: filter rules, in Firewall › Automation › Filter
 
 NAT and filter changes are staged without applying them, then applied through
 an OPNsense **savepoint**. Applying starts a 60s timer that reverts to the
@@ -70,8 +69,6 @@ examples in `defaults/main.yml`.
 - `opnsense_router_ssl_verify`: certificate validation (default `true`). The
   CA is read from `host_vars/<host>/opnsense_ca.pem` if present; it isn't a
   variable.
-- `opnsense_router_vlans`, `opnsense_router_vips`: `interface_vlan` /
-  `interface_vip` entries
 - `opnsense_router_gateways`, `opnsense_router_routes`: `gateway` / `route`
   entries
 - `opnsense_router_aliases`: `alias_multi` entries
