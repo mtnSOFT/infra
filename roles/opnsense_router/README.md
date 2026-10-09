@@ -34,9 +34,11 @@ The API can't do these steps:
    API key to it. Grant it privileges for the pages this role manages, or
    admin. Put the downloaded key and secret into the vault.
 3. Make the web certificate verifiable: install one whose CN/SAN matches
-   `opnsense_router_api_host`, or point `opnsense_router_ssl_ca_file` at the CA.
-   Certificates are placed on hosts out of band, like for the other hosts. Use
-   `opnsense_router_ssl_verify: false` only for the first run.
+   `opnsense_router_api_host`, or save the CA that signed it (PEM) as
+   `<inventory>/host_vars/<host>/opnsense_ca.pem`. That path is fixed, and the
+   role uses the file whenever it exists. Certificates are placed on hosts out
+   of band, like for the other hosts. Use `opnsense_router_ssl_verify: false`
+   only for the first run.
 4. Keep the default _anti-lockout_ rule on LAN. It's the safety net while
    managed rules are applied.
 
@@ -70,8 +72,9 @@ examples in `defaults/main.yml`.
   (vault, no default)
 - `opnsense_router_api_host` / `opnsense_router_api_port`: API endpoint (default
   `ansible_host` or the inventory name / `443`)
-- `opnsense_router_ssl_verify` / `opnsense_router_ssl_ca_file`: certificate
-  validation (default `true` / unset)
+- `opnsense_router_ssl_verify`: certificate validation (default `true`). The
+  CA is read from `host_vars/<host>/opnsense_ca.pem` if present; it isn't a
+  variable.
 - `opnsense_router_vlans`, `opnsense_router_vips`: `interface_vlan` /
   `interface_vip` entries
 - `opnsense_router_gateways`, `opnsense_router_routes`: `gateway` / `route`

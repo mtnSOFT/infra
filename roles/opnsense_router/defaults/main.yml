@@ -13,11 +13,10 @@ opnsense_router_api_port: 443
 # opnsense_router_api_key:
 # opnsense_router_api_secret:
 
-# OPNsense ships a self-signed web certificate. Either trust it explicitly with
-# ssl_ca_file (path on the controller), install a proper one, or - only while
-# bootstrapping - turn ssl_verify off.
+# OPNsense ships a self-signed web certificate. Either trust it explicitly by
+# placing its CA in the host's host_vars directory (see vars/main.yml), install
+# a proper one, or - only while bootstrapping - turn ssl_verify off.
 opnsense_router_ssl_verify: true
-opnsense_router_ssl_ca_file: ""
 
 # --- Interfaces ---------------------------------------------------------------
 # Interface *assignment* (which NIC is wan/lan/optX) is not possible through the
