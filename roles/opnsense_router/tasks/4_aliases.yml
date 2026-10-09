@@ -1,0 +1,8 @@
+---
+- name: Manage firewall aliases
+  oxlorg.opnsense.alias_multi:
+    aliases: "{{ opnsense_router_aliases }}"
+    multi_control:
+      purge_unconfigured: "{{ opnsense_router_purge | bool }}"
+    reload: true
+  when: opnsense_router_aliases | length > 0 or opnsense_router_purge | bool

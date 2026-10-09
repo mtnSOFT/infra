@@ -1,0 +1,35 @@
+---
+# Task files run in order. Tags let you run a subset, e.g. `--tags rules`.
+# To add a task file, drop it in this folder and add an import below.
+
+- name: Configure OPNsense through its API
+  # Every oxlorg.opnsense module needs the same connection args.
+  module_defaults:
+    group/oxlorg.opnsense.all:
+      firewall: "{{ opnsense_router_api_host }}"
+      api_port: "{{ opnsense_router_api_port }}"
+      api_key: "{{ opnsense_router_api_key }}"
+      api_secret: "{{ opnsense_router_api_secret }}"
+      ssl_verify: "{{ opnsense_router_ssl_verify }}"
+      ssl_ca_file: "{{ opnsense_router_ssl_ca_file | default(omit, true) }}"
+  # ansible.cfg censors everything by default, which would hide failing asserts
+  # and the rule diffs. The modules mark api_key/api_secret no_log themselves.
+  no_log: false
+  block:
+    - import_tasks: 1_validate.yml
+      tags: [validate]
+
+    - import_tasks: 2_interfaces.yml
+      tags: [interfaces]
+
+    - import_tasks: 3_routing.yml
+      tags: [routing]
+
+    - import_tasks: 4_aliases.yml
+      tags: [aliases]
+
+    - import_tasks: 5_nat.yml
+      tags: [nat]
+
+    - import_tasks: 6_rules.yml
+      tags: [rules]

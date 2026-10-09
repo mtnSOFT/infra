@@ -1,0 +1,13 @@
+---
+- name: Apply OPNsense router configuration
+  hosts: opnsense_routers
+  # The oxlorg.opnsense modules call the firewall's REST API from the controller.
+  connection: local
+  gather_facts: false
+  become: false
+  vars:
+    # Run the modules with the Python that runs ansible itself (where httpx is
+    # installed), not ansible.cfg's interpreter_python meant for managed hosts.
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+  roles:
+    - opnsense_router
