@@ -114,7 +114,7 @@ vault_opnsense_router_api_secret: "..."
 ### Migrating from linux_router / ufw
 
 | linux_router / ufw                             | opnsense_router                                                                 |
-| ---------------------------------------------- | ------------------------------------------------------------------------------- |
+|------------------------------------------------|---------------------------------------------------------------------------------|
 | `ufw_default_policy_incoming: deny`            | built-in default deny on WAN                                                    |
 | `ufw_default_policy_routed: deny` + NAT allows | rule `interface: [lan]`, `source_net: <alias>`                                  |
 | `server_lan_nat: true`                         | automatic outbound NAT (nothing to configure)                                   |
