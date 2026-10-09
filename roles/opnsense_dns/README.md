@@ -92,12 +92,12 @@ opnsense_dns_general:
 
 opnsense_dns_domain: int.example.net
 
-# stargate, titan, … get A records from the inventory automatically
+# node42, node1, … get A records from the inventory automatically
 opnsense_dns_aliases:
   - alias: pihole
-    target: stargate.int.example.net
+    target: node42.int.example.net
   - alias: code
-    target: titan.int.example.net
+    target: node1.int.example.net
 ```
 
 ### Migrating from powerdns
@@ -114,6 +114,3 @@ opnsense_dns_aliases:
 | `powerdns_recursor_port`          | `opnsense_dns_general.port`                                                             |
 | `powerdns_recursor_dnssec`        | `opnsense_dns_general.dnssec`                                                           |
 | `powerdns_recursor_allow_from`    | `opnsense_dns_acls` (attached networks are allowed already)                             |
-
-If Pi-hole forwards the zone to PowerDNS (`pihole_dns_forward_zones`), point
-that entry at the OPNsense LAN IP on port 53.

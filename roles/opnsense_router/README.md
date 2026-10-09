@@ -4,8 +4,7 @@ Configures an [OPNsense](https://opnsense.org/) firewall as the network's router
 interfaces, gateways and static routes, aliases, outbound NAT and filter rules.
 It uses the [oxlorg.opnsense](https://ansible-opnsense.oxl.app/) collection, which
 talks to the OPNsense REST API **from the controller**. Nothing runs on the
-firewall over SSH. This role replaces [linux_router](../linux_router/README.md) +
-the router side of [ufw](../ufw/README.md).
+firewall over SSH.
 
 ## What it does
 
@@ -53,10 +52,6 @@ The API can't do these steps:
 - **`description` is a rule's identity.** NAT and filter rules are matched on
   it. Renaming one creates a new rule and leaves the old one behind, unless
   `opnsense_router_purge` is on.
-- **Outbound NAT defaults to automatic.** OPNsense already masquerades every
-  local network out of WAN (the old `server_lan_nat`). Entries in
-  `opnsense_router_nat_source` only take effect after switching Firewall › NAT
-  › Outbound to _hybrid_.
 - **No port forwards (DNAT) yet.** The collection has no destination-NAT module.
   Add port forwards by hand in the GUI for now.
 - **The controller needs `httpx`.** The playbook runs the modules with the same
@@ -105,14 +100,14 @@ opnsense_router_api_key: "{{ vault_opnsense_router_api_key }}"
 opnsense_router_api_secret: "{{ vault_opnsense_router_api_secret }}"
 
 opnsense_router_aliases:
-  - name: server_lan
+  - name: int
     type: network
     content: [10.0.0.0/24]
 
 opnsense_router_rules:
-  - description: Server LAN to anywhere
+  - description: int to anywhere
     interface: [lan]
-    source_net: server_lan
+    source_net: int
 
 # vault.yml (ansible-vault)
 vault_opnsense_router_api_key: "..."
@@ -130,6 +125,3 @@ vault_opnsense_router_api_secret: "..."
 | `ufw_group_rules` / `ufw_host_rules`           | `opnsense_router_rules` (`from_ip` → `source_net`, `port` → `destination_port`) |
 | netplan routes                                 | `opnsense_router_gateways` + `opnsense_router_routes`                           |
 | `net.ipv4.ip_forward`                          | inherent                                                                        |
-
-WireGuard and Pi-hole stay on the Linux router for now. Their NAT and listen
-port move together with them later.
