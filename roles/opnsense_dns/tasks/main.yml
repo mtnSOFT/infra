@@ -3,6 +3,7 @@
 # To add a task file, drop it in this folder and add an import below.
 
 - name: Configure Unbound DNS on OPNsense through its API
+  # checkov:skip=CKV2_ANSIBLE_3:The block only scopes module_defaults/no_log; failures must abort the play, not be rescued.
   # Every oxlorg.opnsense module needs the same connection args.
   module_defaults:
     group/oxlorg.opnsense.all:
