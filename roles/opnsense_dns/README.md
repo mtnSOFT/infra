@@ -103,7 +103,7 @@ opnsense_dns_aliases:
 ### Migrating from powerdns
 
 | powerdns                          | opnsense_dns                                                                            |
-| --------------------------------- | --------------------------------------------------------------------------------------- |
+|-----------------------------------|-----------------------------------------------------------------------------------------|
 | `pdns_zone_name`                  | `opnsense_dns_domain`                                                                   |
 | `pdns_auto_inventory_records`     | `opnsense_dns_auto_inventory_records`                                                   |
 | `pdns_records_manual` (A/AAAA/MX) | `opnsense_dns_hosts` (`name` → `hostname`, `content` → `value`, `type` → `record_type`) |
