@@ -28,6 +28,7 @@ directory structure:
 | [linux_router](roles/linux_router/README.md)       | Turns a host into a router/gateway                                         |
 | [monitoring](roles/monitoring/README.md)           | Prometheus + Grafana + Alertmanager as a Docker Compose stack              |
 | [netplan](roles/netplan/README.md)                 | Deploys per-host netplan network config                                    |
+| [opnsense_dns](roles/opnsense_dns/README.md)       | Unbound DNS on OPNsense via its API: host overrides, aliases, forwarding   |
 | [opnsense_router](roles/opnsense_router/README.md) | OPNsense router via its API: routes, aliases, NAT and filter rules         |
 | [pihole](roles/pihole/README.md)                   | Pi-hole DNS sinkhole / ad blocker                                          |
 | [postgresql](roles/postgresql/README.md)           | PostgreSQL 17 server                                                       |

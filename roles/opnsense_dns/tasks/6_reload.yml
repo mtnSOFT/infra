@@ -1,0 +1,13 @@
+---
+# Every step above stages its change with reload: false. Reloading Unbound is
+# slow, so it happens once here. default({}) covers steps skipped by --tags.
+- name: Reload Unbound
+  oxlorg.opnsense.reload:
+    target: unbound
+    api_timeout: "{{ opnsense_dns_reload_timeout }}"
+  when: >-
+    (_opnsense_dns_general_result | default({})) is changed
+    or (_opnsense_dns_hosts_result | default({})) is changed
+    or (_opnsense_dns_aliases_result | default({})) is changed
+    or (_opnsense_dns_forwards_result | default({})) is changed
+    or (_opnsense_dns_acls_result | default({})) is changed
