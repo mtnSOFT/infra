@@ -8,7 +8,6 @@ opnsense_dns_api_port: "{{ opnsense_router_api_port | default(443) }}"
 opnsense_dns_api_key: "{{ opnsense_router_api_key | default('') }}"
 opnsense_dns_api_secret: "{{ opnsense_router_api_secret | default('') }}"
 opnsense_dns_ssl_verify: "{{ opnsense_router_ssl_verify | default(true) }}"
-opnsense_dns_ssl_ca_file: "{{ opnsense_router_ssl_ca_file | default('') }}"
 
 # --- General settings ---------------------------------------------------------
 # Passed to oxlorg.opnsense.unbound_general (Services > Unbound DNS > General).

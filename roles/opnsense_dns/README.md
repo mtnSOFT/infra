@@ -48,9 +48,11 @@ answered locally) / (anything else → upstreams).
 
 ## Key variables
 
-The API connection (`opnsense_dns_api_*`, `opnsense_dns_ssl_*`) defaults to the
-`opnsense_router_*` variables: same firewall, same API user. The API user needs
-privileges for _Services: Unbound DNS_.
+The API connection (`opnsense_dns_api_*`, `opnsense_dns_ssl_verify`) defaults
+to the `opnsense_router_*` variables: same firewall, same API user. The API user
+needs privileges for _Services: Unbound DNS_. Like opnsense_router, the role
+trusts the CA in `<inventory>/host_vars/<host>/opnsense_ca.pem` if that file
+exists.
 
 - `opnsense_dns_general`: `unbound_general` parameters (default `{}`, left
   alone)
