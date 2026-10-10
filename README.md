@@ -18,7 +18,7 @@ directory structure:
 ## Roles
 
 | Role                                                     | Description                                                                |
-| -------------------------------------------------------- | -------------------------------------------------------------------------- |
+|----------------------------------------------------------|----------------------------------------------------------------------------|
 | [acme_client](roles/acme_client/README.md)               | Let's Encrypt certificates via acme.sh + Infomaniak DNS-01                 |
 | [docker-compose](roles/docker-compose/README.md)         | Docker Engine + Compose plugin from the official apt repo                  |
 | [dyndns_client](roles/dyndns_client/README.md)           | Keeps a dynamic DNS record up to date at Infomaniak via cron               |
