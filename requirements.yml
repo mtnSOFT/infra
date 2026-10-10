@@ -1,6 +1,13 @@
 collections:
   - name: kubernetes.core
+    version: ">=6.5.0,<7.0.0"
+  # Keep below 5.0.0: both PowerDNS roles below declare community.docker <5.0.0
+  # in their own requirements.yml, and those constraints are not enforced when
+  # installing from this file. Renovate is configured to respect the cap too.
   - name: community.docker
+    version: ">=4.8.8,<5.0.0"
 roles:
   - name: PowerDNS.pdns
+    version: v1.10.0
   - name: PowerDNS.pdns_recursor
+    version: v2.1.0

@@ -104,6 +104,17 @@ jobs:
       matrix:
         scenario: ${{ fromJSON(needs.detect.outputs.scenarios) }}
     name: molecule (${{ matrix.scenario }})
+
+    # Tag of the toolbox image that provides ansible, molecule and ansible-lint.
+    # Kept in an env var rather than inline below so Renovate can see it: the
+    # customManagers:githubActionsVersions preset matches `# renovate:`-annotated
+    # *_VERSION variables in workflow files. While this is `latest` there is
+    # nothing for Renovate to compare against - it becomes updatable once
+    # mtn-shell publishes real tags.
+    env:
+      # renovate: datasource=docker depName=ghcr.io/mtnstar/mtn-shell
+      MTN_SHELL_VERSION: "latest"
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -120,5 +131,5 @@ jobs:
             -w /work \
             -v "/var/run/user/$(id -u)/podman/podman.sock:/var/run/user/1000/podman/podman.sock" \
             --userns=keep-id:uid="$(id -u)",gid="$(id -g)" \
-            ghcr.io/mtnstar/mtn-shell:latest \
+            "ghcr.io/mtnstar/mtn-shell:${MTN_SHELL_VERSION}" \
             sh -c 'id && ls -lah /home/mtn-admin && cd /work && if [ "${{ matrix.scenario }}" = "powerdns" ]; then ansible-galaxy role install -r requirements.yml -p /tmp/galaxy-roles; fi && molecule test -s ${{ matrix.scenario }}'

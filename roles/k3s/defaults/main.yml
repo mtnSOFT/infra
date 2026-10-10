@@ -1,2 +1,24 @@
+# Versions applied to the cluster on every run. Each carries a `# renovate:`
+# annotation on the line above it - that comment is what makes the version
+# visible to Renovate, so keep it in step with the variable and name any new pin
+# `*_version` or `*_version_tag` (see the Dependency updates section in the
+# repository README).
+
+# renovate: datasource=github-releases depName=cert-manager/cert-manager
 cert_manager_version: "v1.14.0"
+
+# Was previously the floating "stable" tag, so every run applied whatever
+# argo-cd's stable branch held that day. Pinned so upgrades are deliberate.
+# renovate: datasource=github-releases depName=argoproj/argo-cd
+argocd_version: "v3.5.1"
+
+# Passed to the k3s installer as INSTALL_K3S_VERSION. This governs *new* nodes
+# only: the install task is guarded with `creates: /usr/local/bin/k3s`, so
+# bumping this never upgrades a node that already runs k3s. A k3s minor is a
+# Kubernetes minor and must be applied one at a time, never skipped.
+# Not named `k3s_version`: tasks/1_install.yml registers that name for the
+# output of `k3s --version`.
+# renovate: datasource=github-releases depName=k3s-io/k3s versioning=regex:^v(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)\+k3s(?<build>\d+)$
+k3s_install_version: "v1.36.3+k3s1"
+
 kubeconfig: "/etc/rancher/k3s/k3s.yaml"

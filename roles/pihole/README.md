@@ -56,7 +56,9 @@ stack. Needs the [docker-compose](../docker-compose/README.md) role first.
   (`["eth1", "wg0"]`); empty (default) = all interfaces
 - `pihole_web_ip` — host IP the web admin binds to (default empty = all interfaces)
 - `pihole_image` / `pihole_version_tag` — image and tag (default
-  `pihole/pihole:latest`; pin these in inventory)
+  `pihole/pihole:2026.07.2`). Pinned in `defaults/main.yml` and updated by Renovate
+  — see [Dependency updates](../../README.md#dependency-updates). Pin it there
+  rather than in inventory, so the value stays visible to Renovate
 - `dns1` / `dns2` — upstream resolvers
 - `timezone` — container timezone (default `UTC`)
 

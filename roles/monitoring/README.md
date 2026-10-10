@@ -57,8 +57,11 @@ Prometheus, Grafana and Alertmanager as one Docker Compose stack. Needs the
   / `monitoring_alertmanager_routes` / `monitoring_alertmanager_inhibit_rules`
 - `monitoring_grafana_admin_user` — Grafana admin login (default `admin`)
 - `monitoring_grafana_root_url` — Grafana's external URL
-- `monitoring_*_image` / `monitoring_*_version_tag` — image and tag per service
-  (default `latest`; pin these in inventory)
+- `monitoring_*_image` / `monitoring_*_version_tag` — image and tag per service.
+  The tags are pinned in `defaults/main.yml` (Prometheus `v3.13.2`, Grafana
+  `13.1.3`, Alertmanager `v0.33.1`) and updated by Renovate — see
+  [Dependency updates](../../README.md#dependency-updates). Pin them there rather
+  than in inventory, so the value stays visible to Renovate
 - `monitoring_grafana_uid` / `monitoring_grafana_gid` / `monitoring_nobody_uid` /
   `monitoring_nobody_gid` — UID/GID the containers run as and the data dirs are
   chowned to (defaults `472`/`0` and `65534`/`65534`)

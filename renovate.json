@@ -1,0 +1,75 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard",
+    "helpers:pinGitHubActionDigests",
+    "customManagers:githubActionsVersions"
+  ],
+  "timezone": "Europe/Zurich",
+  "schedule": ["before 6am on monday"],
+  "prConcurrentLimit": 5,
+  "labels": ["dependencies"],
+  "customManagers": [
+    {
+      "description": "Any version carrying a '# renovate:' annotation in Ansible vars or molecule scenarios. The annotation comment is the config: it names the datasource and depName, so adding a new pin never needs a change here. The variable must be named *_version or *_version_tag to be picked up.",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "roles/*/defaults/main.yml",
+        "roles/*/vars/main.yml",
+        "inventories/test/group_vars/**/*.yml",
+        "molecule/*/molecule.yml"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>[a-zA-Z0-9-._]+?) depName=(?<depName>[^\\s]+?)(?: (?:lookupName|packageName)=(?<packageName>[^\\s]+?))?(?: versioning=(?<versioning>[^\\s]+?))?(?: extractVersion=(?<extractVersion>[^\\s]+?))?(?: registryUrl=(?<registryUrl>[^\\s]+?))?\\s+[a-z0-9_]+?_version(?:_tag)?\\s*:\\s*[\"']?(?<currentValue>[^\"'\\s]+?)[\"']?\\s",
+        "# renovate: datasource=(?<datasource>[a-zA-Z0-9-._]+?) depName=(?<depName>[^\\s]+?)(?: versioning=(?<versioning>[^\\s]+?))?\\s+image:\\s*\\S+?:(?<currentValue>[^\"'\\s]+?)\\s"
+      ]
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "CI-only deps: automerge once checks pass",
+      "matchManagers": ["github-actions", "dockerfile"],
+      "matchUpdateTypes": ["minor", "patch", "digest", "pin"],
+      "automerge": true
+    },
+    {
+      "description": "Molecule platform and workflow images are CI-only too",
+      "matchManagers": ["custom.regex"],
+      "matchFileNames": ["molecule/**", ".github/workflows/**"],
+      "matchUpdateTypes": ["minor", "patch", "digest"],
+      "automerge": true
+    },
+    {
+      "description": "The fleet targets Ubuntu 24.04 LTS. An OS bump is a project, not a PR - 26.04 is already released and would otherwise show up immediately.",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["ubuntu", "ghcr.io/mtnsoft/infra-test-ubuntu"],
+      "matchUpdateTypes": ["major", "minor"],
+      "enabled": false
+    },
+    {
+      "description": "PowerDNS.pdns and PowerDNS.pdns_recursor both require community.docker <5.0.0",
+      "matchManagers": ["ansible-galaxy"],
+      "matchPackageNames": ["community.docker"],
+      "allowedVersions": "<5.0.0"
+    },
+    {
+      "description": "Anything that reaches production hosts is reviewed by hand",
+      "matchFileNames": ["requirements.yml", "roles/**"],
+      "automerge": false,
+      "addLabels": ["deployed-version"]
+    },
+    {
+      "description": "Prometheus and Alertmanager move together",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["prom/prometheus", "prom/alertmanager"],
+      "groupName": "prometheus stack"
+    },
+    {
+      "description": "A k3s minor is a Kubernetes minor; those must be applied one at a time, never skipped",
+      "matchDepNames": ["k3s-io/k3s"],
+      "separateMinorPatch": true,
+      "automerge": false
+    }
+  ]
+}

@@ -7,15 +7,29 @@ monitoring_dir: "/containers/monitoring"
 # molecule scenario does, since the test container has no docker daemon.
 monitoring_deploy: true
 
-# Container images and tags, one pair per service. `latest` matches the repo
-# convention, but pin these in inventory: a Grafana or Prometheus major bump
-# can break provisioned dashboards and stored data.
+# Container images and tags, one pair per service. The tags are pinned here and
+# not in inventory, because inventories/production lives outside this repository
+# and Renovate cannot see it - a pin it cannot see is a pin it cannot update.
+#
+# Each tag carries a `# renovate:` annotation naming the image it belongs to. If
+# you change a *_image value, change the depName in the comment above its tag to
+# match, or Renovate keeps watching the old image.
+#
+# A Grafana or Prometheus major bump can break provisioned dashboards and stored
+# data, so these arrive as individual PRs for review and are never automerged.
+#
+# Pinned 2026-08-14 from the then-current upstream releases. Confirm against
+# `playbooks/report_versions.yml` before the first apply: if a host is running an
+# older image, applying these is an upgrade.
 monitoring_prometheus_image: "prom/prometheus"
-monitoring_prometheus_version_tag: "latest"
+# renovate: datasource=docker depName=prom/prometheus
+monitoring_prometheus_version_tag: "v3.13.2"
 monitoring_grafana_image: "grafana/grafana"
-monitoring_grafana_version_tag: "latest"
+# renovate: datasource=docker depName=grafana/grafana
+monitoring_grafana_version_tag: "13.1.3"
 monitoring_alertmanager_image: "prom/alertmanager"
-monitoring_alertmanager_version_tag: "latest"
+# renovate: datasource=docker depName=prom/alertmanager
+monitoring_alertmanager_version_tag: "v0.33.1"
 
 # Host IP the published ports bind to. Docker's published ports are DNAT'd and
 # bypass UFW's INPUT chain, so this binding - not the firewall - is what limits
