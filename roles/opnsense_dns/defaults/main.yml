@@ -1,0 +1,86 @@
+---
+# --- API connection -----------------------------------------------------------
+# Same firewall and API user as opnsense_router, so every connection setting
+# falls back to the matching opnsense_router_* variable. Override only if DNS is
+# managed with a separate API user.
+opnsense_dns_api_host: "{{ opnsense_router_api_host | default(ansible_host | default(inventory_hostname)) }}"
+opnsense_dns_api_port: "{{ opnsense_router_api_port | default(443) }}"
+opnsense_dns_api_key: "{{ opnsense_router_api_key | default('') }}"
+opnsense_dns_api_secret: "{{ opnsense_router_api_secret | default('') }}"
+opnsense_dns_ssl_verify: "{{ opnsense_router_ssl_verify | default(true) }}"
+
+# --- General settings ---------------------------------------------------------
+# Passed to oxlorg.opnsense.unbound_general (Services > Unbound DNS > General).
+# Left alone while empty. Keys are the module's parameter names.
+opnsense_dns_general: {}
+# Example:
+# opnsense_dns_general:
+#   enabled: true
+#   interfaces: [lan]
+#   port: 53
+#   dnssec: true
+#   register_dhcp_leases: true
+#   dhcp_domain: int.example.net
+#   # The collection's documented default is misspelled - set it explicitly.
+#   local_zone_type: transparent
+
+# --- Local zone ---------------------------------------------------------------
+# The zone the host overrides and aliases live in (the old pdns_zone_name).
+# Entries without their own `domain` use it.
+opnsense_dns_domain: ""
+
+# Create an A record <inventory_hostname>.<opnsense_dns_domain> for every
+# inventory host whose ansible_host is an IPv4 address (hosts addressed by name
+# are skipped). Needs opnsense_dns_domain.
+opnsense_dns_auto_inventory_records: true
+
+# Extra host overrides (oxlorg.opnsense.unbound_host). Unbound supports only
+# A, AAAA and MX here - no TXT, SRV or CNAME (use opnsense_dns_aliases for
+# in-zone CNAMEs). `description` is the identity and defaults to
+# "<hostname>.<domain> <record_type>"; an entry with the same description as an
+# inventory record replaces it.
+opnsense_dns_hosts: []
+# Example:
+# opnsense_dns_hosts:
+#   - hostname: www
+#     value: 10.0.0.100
+#   - hostname: www
+#     record_type: AAAA
+#     value: fd00::100
+
+# Aliases (oxlorg.opnsense.unbound_host_alias) - the replacement for CNAMEs.
+# `target` must be the FQDN of a host override above or an inventory record.
+# `description` is the identity and defaults to "<alias>.<domain> alias".
+opnsense_dns_aliases: []
+# Example:
+# opnsense_dns_aliases:
+#   - alias: pihole
+#     target: stargate.int.example.net
+
+# --- Forwarding ---------------------------------------------------------------
+# Upstream resolvers for every query outside the local zones (global forward).
+# Set to [] to let Unbound resolve from the root servers itself.
+opnsense_dns_upstreams:
+  - "{{ dns1 | default('8.8.8.8') }}"
+  - "{{ dns2 | default('8.8.4.4') }}"
+
+# Extra per-domain forwards (oxlorg.opnsense.unbound_forward).
+opnsense_dns_forwards: []
+# Example:
+# opnsense_dns_forwards:
+#   - domain: lab.example.net
+#     target: 10.10.0.3
+#     port: 53
+
+# --- Access lists -------------------------------------------------------------
+# oxlorg.opnsense.unbound_acl entries. Unbound already allows the networks of
+# the interfaces it listens on; add entries for routed networks (VPN, k3s, ...).
+opnsense_dns_acls: []
+# Example:
+# opnsense_dns_acls:
+#   - name: wireguard
+#     action: allow
+#     networks: [10.10.0.0/24]
+
+# Seconds to wait for the final Unbound reload, which can be slow.
+opnsense_dns_reload_timeout: 60

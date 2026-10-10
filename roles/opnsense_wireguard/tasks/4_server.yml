@@ -1,0 +1,19 @@
+---
+# Peers are linked by name, so 3_peers has to create them first.
+- name: Manage the WireGuard instance
+  oxlorg.opnsense.wireguard_server:
+    name: "{{ opnsense_wireguard_name }}"
+    private_key: "{{ opnsense_wireguard_private_key }}"
+    public_key: "{{ opnsense_wireguard_public_key }}"
+    port: "{{ wireguard_port }}"
+    allowed_ips: ["{{ wireguard_internal_server_ip }}"]
+    mtu: "{{ wireguard_mtu | default(omit, true) }}"
+    peers: "{{ wireguard_clients_peers | map(attribute='name') | list }}"
+    reload: false
+  register: _opnsense_wireguard_server_result
+
+- name: Enable the WireGuard service
+  oxlorg.opnsense.wireguard_general:
+    enabled: true
+    reload: false
+  register: _opnsense_wireguard_general_result

@@ -1,0 +1,80 @@
+---
+# --- API connection -----------------------------------------------------------
+# The role runs on the controller and talks to the OPNsense REST API through the
+# oxlorg.opnsense collection - nothing is executed on the firewall over SSH.
+
+# Address of the web UI / API. With ssl_verify on it must match the certificate's
+# CN or a SAN.
+opnsense_router_api_host: "{{ ansible_host | default(inventory_hostname) }}"
+opnsense_router_api_port: 443
+
+# Key + secret of the API user (System > Access > Users > API keys). No default -
+# set them from the vault, e.g. "{{ vault_opnsense_router_api_key }}".
+# opnsense_router_api_key:
+# opnsense_router_api_secret:
+
+# OPNsense ships a self-signed web certificate. Either trust it explicitly by
+# placing its CA in the host's host_vars directory (see vars/main.yml), install
+# a proper one, or - only while bootstrapping - turn ssl_verify off.
+opnsense_router_ssl_verify: true
+
+# --- Routing ------------------------------------------------------------------
+# Gateways first, routes reference them by name (oxlorg.opnsense.gateway / route).
+opnsense_router_gateways: []
+# Example:
+# opnsense_router_gateways:
+#   - name: k3s_gw
+#     interface: lan
+#     gateway: 10.0.0.10
+#     description: k3s node network
+
+opnsense_router_routes: []
+# Example:
+# opnsense_router_routes:
+#   - network: 10.20.0.0/24
+#     gateway: k3s_gw
+#     description: k3s pod network
+
+# --- Firewall aliases ---------------------------------------------------------
+# Passed as-is to oxlorg.opnsense.alias_multi, so rules and NAT can reference
+# networks/hosts/ports by name.
+opnsense_router_aliases: []
+# Example:
+# opnsense_router_aliases:
+#   - name: server_lan
+#     type: network
+#     content: [10.0.0.0/24]
+#     description: Server LAN
+
+# --- Outbound NAT -------------------------------------------------------------
+# OPNsense's default "automatic" outbound NAT already masquerades every local
+# interface network out of WAN - the old server_lan_nat. Only list extra subnets
+# here (the old ufw_nat_rules), and switch Firewall > NAT > Outbound to "hybrid"
+# for them to take effect. Keys are oxlorg.opnsense.nat_source parameters;
+# `description` is the identity, so keep it unique and stable.
+opnsense_router_nat_source: []
+# Example:
+# opnsense_router_nat_source:
+#   - description: k3s pods to internet
+#     interface: wan
+#     source_net: 10.20.0.0/24
+#     target: wanip
+
+# --- Filter rules -------------------------------------------------------------
+# Passed as-is to oxlorg.opnsense.rule_multi. They land in Firewall > Automation >
+# Filter, which is evaluated before the per-interface GUI rules. `description` is
+# the identity, so keep it unique and stable - changing it creates a new rule.
+opnsense_router_rules: []
+# Example:
+# opnsense_router_rules:
+#   - description: SSH from server LAN to router
+#     interface: [lan]
+#     protocol: TCP
+#     source_net: server_lan
+#     destination_net: 10.0.0.1   # router LAN IP
+#     destination_port: "22"
+
+# Delete automation rules and aliases that are not listed above - the
+# equivalent of the old ufw_reset. Off by default: run once with --check --diff
+# and read the deletions before enabling it.
+opnsense_router_purge: false

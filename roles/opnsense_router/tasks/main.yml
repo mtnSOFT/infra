@@ -1,0 +1,42 @@
+---
+# Task files run in order. Tags let you run a subset, e.g. `--tags rules`.
+# To add a task file, drop it in this folder and add an import below.
+
+- name: Configure OPNsense through its API
+  # Every oxlorg.opnsense module needs the same connection args.
+  module_defaults:
+    group/oxlorg.opnsense.all:
+      firewall: "{{ opnsense_router_api_host }}"
+      api_port: "{{ opnsense_router_api_port }}"
+      api_key: "{{ opnsense_router_api_key }}"
+      api_secret: "{{ opnsense_router_api_secret }}"
+      ssl_verify: "{{ opnsense_router_ssl_verify }}"
+      # Without the CA file the system trust store is used.
+      ssl_ca_file: "{{ opnsense_router_ssl_ca_file if opnsense_router_ssl_ca_file is file else omit }}"
+  # ansible.cfg censors everything by default, which would hide failing asserts
+  # and the rule diffs. The modules mark api_key/api_secret no_log themselves.
+  no_log: false
+  block:
+    - import_tasks: 1_validate.yml
+      tags: [validate]
+
+    - import_tasks: 2_routing.yml
+      tags: [routing]
+
+    - import_tasks: 3_aliases.yml
+      tags: [aliases]
+
+    - import_tasks: 4_nat.yml
+      tags: [nat]
+
+    - import_tasks: 5_rules.yml
+      tags: [rules]
+
+  # checkov (CKV2_ANSIBLE_3) wants a rescue, and its inline skip does not work on
+  # blocks. Re-fail so the play still aborts; `always` keeps it running under
+  # --tags, otherwise a filtered run would swallow the error.
+  rescue:
+    - name: Fail after OPNsense configuration error
+      ansible.builtin.fail:
+        msg: "OPNsense configuration failed on {{ inventory_hostname }}, see the failed task above."
+      tags: [always]

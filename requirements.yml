@@ -1,6 +1,11 @@
 collections:
   - name: kubernetes.core
   - name: community.docker
+  - name: community.general
+  # Releases are tied to an OPNsense major (26.1.x <-> OPNsense 26.1); move this
+  # range together with firewall upgrades.
+  - name: oxlorg.opnsense
+    version: ">=26.1.0,<26.2.0"
 roles:
   - name: PowerDNS.pdns
   - name: PowerDNS.pdns_recursor

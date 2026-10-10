@@ -1,0 +1,43 @@
+---
+# Task files run in order. Tags let you run a subset, e.g. `--tags peers`.
+# To add a task file, drop it in this folder and add an import below.
+
+- name: Configure WireGuard on OPNsense through its API
+  # Every oxlorg.opnsense module needs the same connection args.
+  module_defaults:
+    group/oxlorg.opnsense.all:
+      firewall: "{{ opnsense_wireguard_api_host }}"
+      api_port: "{{ opnsense_wireguard_api_port }}"
+      api_key: "{{ opnsense_wireguard_api_key }}"
+      api_secret: "{{ opnsense_wireguard_api_secret }}"
+      ssl_verify: "{{ opnsense_wireguard_ssl_verify }}"
+      # Without the CA file the system trust store is used.
+      ssl_ca_file: "{{ opnsense_wireguard_ssl_ca_file if opnsense_wireguard_ssl_ca_file is file else omit }}"
+  # ansible.cfg censors everything by default, which would hide failing asserts
+  # and the diffs. The modules mark keys and PSKs no_log themselves.
+  no_log: false
+  block:
+    - import_tasks: 1_validate.yml
+      tags: [validate, always]
+
+    # Builds the peer list (with keys) the later steps use.
+    - import_tasks: 2_clients.yml
+      tags: [clients, peers, server]
+
+    - import_tasks: 3_peers.yml
+      tags: [peers]
+
+    - import_tasks: 4_server.yml
+      tags: [server]
+
+    - import_tasks: 5_reload.yml
+      tags: [always]
+
+  # checkov (CKV2_ANSIBLE_3) wants a rescue, and its inline skip does not work on
+  # blocks. Re-fail so the play still aborts; `always` keeps it running under
+  # --tags, otherwise a filtered run would swallow the error.
+  rescue:
+    - name: Fail after WireGuard configuration error
+      ansible.builtin.fail:
+        msg: "WireGuard configuration failed on {{ inventory_hostname }}, see the failed task above."
+      tags: [always]

@@ -1,0 +1,5 @@
+---
+# Same fixed CA location as opnsense_router (its vars/main.yml): the CA that
+# signed the firewall's web certificate, next to the host's other host_vars.
+# Used only if the file exists - a publicly trusted certificate needs no CA file.
+opnsense_dns_ssl_ca_file: "{{ inventory_dir }}/host_vars/{{ inventory_hostname }}/opnsense_ca.pem"

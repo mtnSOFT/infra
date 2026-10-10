@@ -1,0 +1,134 @@
+---
+- name: Validate OPNsense API credentials
+  ansible.builtin.assert:
+    that:
+      - opnsense_dns_api_key | length > 0
+      - opnsense_dns_api_secret | length > 0
+    fail_msg: >-
+      Set opnsense_router_api_key and opnsense_router_api_secret (or the
+      opnsense_dns_* overrides) from the vault for {{ inventory_hostname }} -
+      see the opnsense_router README.
+    quiet: true
+
+- name: Validate required fields of host overrides and aliases
+  ansible.builtin.assert:
+    that:
+      - opnsense_dns_hosts | rejectattr('hostname', 'defined') | list | length == 0
+      - opnsense_dns_aliases | rejectattr('alias', 'defined') | list | length == 0
+      - >-
+        opnsense_dns_domain | length > 0
+        or (opnsense_dns_hosts + opnsense_dns_aliases) | rejectattr('domain', 'defined') | list | length == 0
+    fail_msg: >-
+      Every opnsense_dns_hosts entry needs a `hostname`, every
+      opnsense_dns_aliases entry an `alias`, and entries without their own
+      `domain` need opnsense_dns_domain.
+    quiet: true
+
+# --- Build the record lists ---------------------------------------------------
+# Fill in `domain`, `record_type`, `state`, `fqdn` and `description` (the
+# identity the modules match on), so every entry is complete before it is
+# checked and applied.
+
+- name: Start with empty record lists
+  ansible.builtin.set_fact:
+    _opnsense_dns_inventory_hosts: []
+    _opnsense_dns_manual_hosts: []
+    _opnsense_dns_aliases: []
+
+- name: Build A records for inventory hosts
+  ansible.builtin.set_fact:
+    _opnsense_dns_inventory_hosts: >-
+      {{ _opnsense_dns_inventory_hosts + [{
+           'hostname': item,
+           'domain': opnsense_dns_domain,
+           'record_type': 'A',
+           'value': hostvars[item].ansible_host,
+           'state': 'present',
+           'fqdn': item ~ '.' ~ opnsense_dns_domain,
+           'description': item ~ '.' ~ opnsense_dns_domain ~ ' A'}] }}
+  loop: "{{ groups['all'] }}"
+  when:
+    - opnsense_dns_auto_inventory_records | bool
+    - opnsense_dns_domain | length > 0
+    # Only hosts addressed by an IPv4 address; names can't become an A record.
+    - hostvars[item].ansible_host is defined
+    - hostvars[item].ansible_host is match('^[0-9]{1,3}(\.[0-9]{1,3}){3}$')
+
+- name: Normalize manual host overrides
+  ansible.builtin.set_fact:
+    _opnsense_dns_manual_hosts: >-
+      {{ _opnsense_dns_manual_hosts + [item | combine({
+           'domain': _domain,
+           'record_type': _type,
+           'state': item.state | default('present'),
+           'fqdn': item.hostname ~ '.' ~ _domain,
+           'description': item.description | default(item.hostname ~ '.' ~ _domain ~ ' ' ~ _type)})] }}
+  vars:
+    _domain: "{{ item.domain | default(opnsense_dns_domain) }}"
+    _type: "{{ item.record_type | default('A') | upper }}"
+  loop: "{{ opnsense_dns_hosts }}"
+  loop_control:
+    label: "{{ item.hostname }}"
+
+- name: Normalize aliases
+  ansible.builtin.set_fact:
+    _opnsense_dns_aliases: >-
+      {{ _opnsense_dns_aliases + [item | combine({
+           'domain': _domain,
+           'target': item.target | default('') | regex_replace('\.$', ''),
+           'state': item.state | default('present'),
+           'description': item.description | default(item.alias ~ '.' ~ _domain ~ ' alias')})] }}
+  vars:
+    _domain: "{{ item.domain | default(opnsense_dns_domain) }}"
+  loop: "{{ opnsense_dns_aliases }}"
+  loop_control:
+    label: "{{ item.alias }}"
+
+# A manual entry replaces the inventory record with the same description, e.g.
+# to pin a different address for one host.
+- name: Merge inventory and manual host overrides
+  ansible.builtin.set_fact:
+    _opnsense_dns_hosts: >-
+      {{ (_opnsense_dns_inventory_hosts
+          | rejectattr('description', 'in', _opnsense_dns_manual_hosts | map(attribute='description') | list)
+          | list)
+         + _opnsense_dns_manual_hosts }}
+
+# --- Check the built lists ----------------------------------------------------
+
+- name: Validate host overrides
+  ansible.builtin.assert:
+    that:
+      - _opnsense_dns_hosts | map(attribute='record_type') | reject('in', ['A', 'AAAA', 'MX']) | list | length == 0
+      - _opnsense_dns_manual_hosts | rejectattr('value', 'defined') | rejectattr('state', 'eq', 'absent') | list | length == 0
+      - _opnsense_dns_manual_hosts | map(attribute='description') | unique | list | length == _opnsense_dns_manual_hosts | length
+    fail_msg: >-
+      Every opnsense_dns_hosts entry needs a `value`, a record_type of A, AAAA
+      or MX (Unbound supports no other types here - use opnsense_dns_aliases
+      for CNAMEs), and a unique description.
+      Got: {{ _opnsense_dns_manual_hosts | map(attribute='description') | list }}.
+    quiet: true
+
+# Aliases only resolve if their target is an A/AAAA override that will exist,
+# e.g. not a host the inventory step skipped because ansible_host is a name.
+- name: Validate aliases
+  ansible.builtin.assert:
+    that:
+      - _opnsense_dns_aliases | map(attribute='description') | unique | list | length == _opnsense_dns_aliases | length
+      - _missing_targets | length == 0
+    fail_msg: >-
+      Every opnsense_dns_aliases entry needs a unique description and a
+      `target` that is the FQDN of an A/AAAA host override. Unknown targets:
+      {{ _missing_targets }}.
+    quiet: true
+  vars:
+    _known_fqdns: >-
+      {{ _opnsense_dns_hosts
+         | selectattr('record_type', 'in', ['A', 'AAAA'])
+         | rejectattr('state', 'eq', 'absent')
+         | map(attribute='fqdn') | list }}
+    _missing_targets: >-
+      {{ _opnsense_dns_aliases
+         | rejectattr('state', 'eq', 'absent')
+         | map(attribute='target')
+         | reject('in', _known_fqdns) | list }}

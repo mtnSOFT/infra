@@ -17,22 +17,26 @@ directory structure:
 
 ## Roles
 
-| Role                                             | Description                                                                |
-|--------------------------------------------------|----------------------------------------------------------------------------|
-| [acme_client](roles/acme_client/README.md)       | Let's Encrypt certificates via acme.sh + Infomaniak DNS-01                 |
-| [docker-compose](roles/docker-compose/README.md) | Docker Engine + Compose plugin from the official apt repo                  |
-| [dyndns_client](roles/dyndns_client/README.md)   | Keeps a dynamic DNS record up to date at Infomaniak via cron               |
-| [gitea](roles/gitea/README.md)                   | Gitea self-hosted git service as a Docker Compose stack                    |
-| [k3s](roles/k3s/README.md)                       | k3s Kubernetes cluster with cert-manager + ArgoCD                          |
-| [linux_base](roles/linux_base/README.md)         | Base configuration + first-run bootstrap for every host                    |
-| [linux_router](roles/linux_router/README.md)     | Turns a host into a router/gateway                                         |
-| [monitoring](roles/monitoring/README.md)         | Prometheus + Grafana + Alertmanager as a Docker Compose stack              |
-| [netplan](roles/netplan/README.md)               | Deploys per-host netplan network config                                    |
-| [pihole](roles/pihole/README.md)                 | Pi-hole DNS sinkhole / ad blocker                                          |
-| [postgresql](roles/postgresql/README.md)         | PostgreSQL 17 server                                                       |
-| [powerdns](roles/powerdns/README.md)             | Authoritative PowerDNS server + Recursor (resolves outside the local zone) |
-| [ufw](roles/ufw/README.md)                       | UFW firewall: policies, rules and WireGuard NAT                            |
-| [wireguard](roles/wireguard/README.md)           | WireGuard VPN server + client config generation                            |
+| Role                                                     | Description                                                                |
+| -------------------------------------------------------- | -------------------------------------------------------------------------- |
+| [acme_client](roles/acme_client/README.md)               | Let's Encrypt certificates via acme.sh + Infomaniak DNS-01                 |
+| [docker-compose](roles/docker-compose/README.md)         | Docker Engine + Compose plugin from the official apt repo                  |
+| [dyndns_client](roles/dyndns_client/README.md)           | Keeps a dynamic DNS record up to date at Infomaniak via cron               |
+| [gitea](roles/gitea/README.md)                           | Gitea self-hosted git service as a Docker Compose stack                    |
+| [k3s](roles/k3s/README.md)                               | k3s Kubernetes cluster with cert-manager + ArgoCD                          |
+| [linux_base](roles/linux_base/README.md)                 | Base configuration + first-run bootstrap for every host                    |
+| [linux_router](roles/linux_router/README.md)             | Turns a host into a router/gateway                                         |
+| [monitoring](roles/monitoring/README.md)                 | Prometheus + Grafana + Alertmanager as a Docker Compose stack              |
+| [netplan](roles/netplan/README.md)                       | Deploys per-host netplan network config                                    |
+| [opnsense_dns](roles/opnsense_dns/README.md)             | Unbound DNS on OPNsense via its API: host overrides, aliases, forwarding   |
+| [opnsense_router](roles/opnsense_router/README.md)       | OPNsense router via its API: routes, aliases, NAT and filter rules         |
+| [opnsense_wireguard](roles/opnsense_wireguard/README.md) | WireGuard VPN on OPNsense via its API, keeping the existing client keys    |
+| [pihole](roles/pihole/README.md)                         | Pi-hole DNS sinkhole / ad blocker                                          |
+| [postgresql](roles/postgresql/README.md)                 | PostgreSQL 17 server                                                       |
+| [powerdns](roles/powerdns/README.md)                     | Authoritative PowerDNS server + Recursor (resolves outside the local zone) |
+| [ufw](roles/ufw/README.md)                               | UFW firewall: policies, rules and WireGuard NAT                            |
+| [wireguard](roles/wireguard/README.md)                   | WireGuard VPN server + client config generation                            |
+| [wireguard_clients](roles/wireguard_clients/README.md)   | WireGuard client configs (vaulted) shared by both WireGuard roles          |
 
 ## Getting Started
 

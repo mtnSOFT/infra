@@ -1,0 +1,31 @@
+---
+- name: Manage gateways
+  oxlorg.opnsense.gateway:
+    name: "{{ item.name }}"
+    interface: "{{ item.interface | default(omit) }}"
+    gateway: "{{ item.gateway | default(omit) }}"
+    ip_protocol: "{{ item.ip_protocol | default(omit) }}"
+    default_gw: "{{ item.default_gw | default(omit) }}"
+    far_gw: "{{ item.far_gw | default(omit) }}"
+    monitor_disable: "{{ item.monitor_disable | default(omit) }}"
+    monitor: "{{ item.monitor | default(omit) }}"
+    priority: "{{ item.priority | default(omit) }}"
+    description: "{{ item.description | default(omit) }}"
+    state: "{{ item.state | default(omit) }}"
+    match_fields: [name]
+    reload: true
+  loop: "{{ opnsense_router_gateways }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Manage static routes
+  oxlorg.opnsense.route:
+    network: "{{ item.network }}"
+    gateway: "{{ item.gateway }}"
+    description: "{{ item.description | default(omit) }}"
+    enabled: "{{ item.enabled | default(omit) }}"
+    state: "{{ item.state | default(omit) }}"
+    reload: true
+  loop: "{{ opnsense_router_routes }}"
+  loop_control:
+    label: "{{ item.network }} via {{ item.gateway }}"

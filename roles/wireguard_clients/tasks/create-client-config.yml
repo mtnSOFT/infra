@@ -7,9 +7,6 @@
   ansible.builtin.set_fact:
     client_config_lan_path: "{{ local_wireguard_client_config_dir }}/{{ client.name }}/vpn-{{ wireguard_company }}-lan.conf"
 
-- name: Extract existing server keys
-  include_tasks: "process-server-keys.yml"
-
 - name: Make sure client config dir exists for given client
   delegate_to: localhost
   ansible.builtin.file:
@@ -131,14 +128,11 @@
   register: client_public_key
   changed_when: false
 
-- name: Set client public key fact
+- name: Add {{ client.name }} to the server's peer list
   ansible.builtin.set_fact:
-    client_public_key: "{{ client_public_key.stdout }}"
-
-- name: Append peer config to server config
-  ansible.builtin.blockinfile:
-    path: /etc/wireguard/{{ wireguard_interface }}.conf
-    block: "{{ lookup('template', 'client-peer-section.conf.j2') }}"
-    marker: "# {mark} peer {{ client.name }}"
-    insertafter: EOF
-  changed_when: false
+    wireguard_clients_peers: >-
+      {{ wireguard_clients_peers + [{
+           'name': client.name,
+           'ip': client.ip,
+           'public_key': client_public_key.stdout,
+           'preshared_key': client_preshared_key}] }}
