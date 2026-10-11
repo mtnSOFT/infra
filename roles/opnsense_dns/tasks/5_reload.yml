@@ -10,4 +10,3 @@
     or (_opnsense_dns_hosts_result | default({})) is changed
     or (_opnsense_dns_aliases_result | default({})) is changed
     or (_opnsense_dns_forwards_result | default({})) is changed
-    or (_opnsense_dns_acls_result | default({})) is changed

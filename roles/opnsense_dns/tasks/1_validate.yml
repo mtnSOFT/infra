@@ -10,6 +10,15 @@
       see the opnsense_router README.
     quiet: true
 
+- name: Validate the OPNsense CA file
+  ansible.builtin.assert:
+    that:
+      - (inventory_dir ~ '/host_vars/' ~ inventory_hostname ~ '/opnsense_ca.pem') is file
+    fail_msg: >-
+      Save the CA that signed the firewall's web certificate (PEM) as
+      {{ inventory_dir }}/host_vars/{{ inventory_hostname }}/opnsense_ca.pem.
+    quiet: true
+
 - name: Validate required fields of host overrides and aliases
   ansible.builtin.assert:
     that:
@@ -99,17 +108,16 @@
 - name: Validate host overrides
   ansible.builtin.assert:
     that:
-      - _opnsense_dns_hosts | map(attribute='record_type') | reject('in', ['A', 'AAAA', 'MX']) | list | length == 0
+      - _opnsense_dns_hosts | map(attribute='record_type') | reject('in', ['A', 'MX']) | list | length == 0
       - _opnsense_dns_manual_hosts | rejectattr('value', 'defined') | rejectattr('state', 'eq', 'absent') | list | length == 0
       - _opnsense_dns_manual_hosts | map(attribute='description') | unique | list | length == _opnsense_dns_manual_hosts | length
     fail_msg: >-
-      Every opnsense_dns_hosts entry needs a `value`, a record_type of A, AAAA
-      or MX (Unbound supports no other types here - use opnsense_dns_aliases
-      for CNAMEs), and a unique description.
+      Every opnsense_dns_hosts entry needs a `value`, a record_type of A or MX
+      (use opnsense_dns_aliases for CNAMEs), and a unique description.
       Got: {{ _opnsense_dns_manual_hosts | map(attribute='description') | list }}.
     quiet: true
 
-# Aliases only resolve if their target is an A/AAAA override that will exist,
+# Aliases only resolve if their target is an A override that will exist,
 # e.g. not a host the inventory step skipped because ansible_host is a name.
 - name: Validate aliases
   ansible.builtin.assert:
@@ -118,13 +126,13 @@
       - _missing_targets | length == 0
     fail_msg: >-
       Every opnsense_dns_aliases entry needs a unique description and a
-      `target` that is the FQDN of an A/AAAA host override. Unknown targets:
+      `target` that is the FQDN of an A host override. Unknown targets:
       {{ _missing_targets }}.
     quiet: true
   vars:
     _known_fqdns: >-
       {{ _opnsense_dns_hosts
-         | selectattr('record_type', 'in', ['A', 'AAAA'])
+         | selectattr('record_type', 'eq', 'A')
          | rejectattr('state', 'eq', 'absent')
          | map(attribute='fqdn') | list }}
     _missing_targets: >-

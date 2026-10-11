@@ -11,8 +11,9 @@
       api_key: "{{ opnsense_router_api_key }}"
       api_secret: "{{ opnsense_router_api_secret }}"
       ssl_verify: "{{ opnsense_router_ssl_verify }}"
-      # Without the CA file the system trust store is used.
-      ssl_ca_file: "{{ opnsense_router_ssl_ca_file if opnsense_router_ssl_ca_file is file else omit }}"
+      # CA that signed the web certificate, next to the host's other host_vars
+      # (ansible doesn't load .pem files from there). Checked in 1_validate.yml.
+      ssl_ca_file: "{{ inventory_dir }}/host_vars/{{ inventory_hostname }}/opnsense_ca.pem"
   # ansible.cfg censors everything by default, which would hide failing asserts
   # and the rule diffs. The modules mark api_key/api_secret no_log themselves.
   no_log: false

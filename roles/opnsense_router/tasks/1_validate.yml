@@ -11,6 +11,15 @@
       for {{ inventory_hostname }} - see the Bootstrap section of the role README.
     quiet: true
 
+- name: Validate the OPNsense CA file
+  ansible.builtin.assert:
+    that:
+      - (inventory_dir ~ '/host_vars/' ~ inventory_hostname ~ '/opnsense_ca.pem') is file
+    fail_msg: >-
+      Save the CA that signed the firewall's web certificate (PEM) as
+      {{ inventory_dir }}/host_vars/{{ inventory_hostname }}/opnsense_ca.pem.
+    quiet: true
+
 # NAT and filter rules are matched by description, so an entry without one (or
 # two with the same) would be created again on every run instead of updated.
 - name: Validate NAT and filter rule descriptions

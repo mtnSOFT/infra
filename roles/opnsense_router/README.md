@@ -32,11 +32,11 @@ The API can't do these steps:
    API key to it. Grant it privileges for the pages this role manages, or
    admin. Put the downloaded key and secret into the vault.
 3. Make the web certificate verifiable: install one whose CN/SAN matches
-   `opnsense_router_api_host`, or save the CA that signed it (PEM) as
+   `opnsense_router_api_host`, and save the CA that signed it (PEM) as
    `<inventory>/host_vars/<host>/opnsense_ca.pem`. That path is fixed, and the
-   role uses the file whenever it exists. Certificates are placed on hosts out
-   of band, like for the other hosts. Use `opnsense_router_ssl_verify: false`
-   only for the first run.
+   role fails if the file is missing. Certificates are placed on hosts out of
+   band, like for the other hosts. Use `opnsense_router_ssl_verify: false` only
+   for the first run.
 4. Keep the default _anti-lockout_ rule on LAN. It's the safety net while
    managed rules are applied.
 
@@ -67,7 +67,7 @@ examples in `defaults/main.yml`.
 - `opnsense_router_api_host` / `opnsense_router_api_port`: API endpoint (default
   `ansible_host` or the inventory name / `443`)
 - `opnsense_router_ssl_verify`: certificate validation (default `true`). The
-  CA is read from `host_vars/<host>/opnsense_ca.pem` if present; it isn't a
+  CA is always read from `host_vars/<host>/opnsense_ca.pem`; it isn't a
   variable.
 - `opnsense_router_gateways`, `opnsense_router_routes`: `gateway` / `route`
   entries
@@ -110,15 +110,3 @@ opnsense_router_rules:
 vault_opnsense_router_api_key: "..."
 vault_opnsense_router_api_secret: "..."
 ```
-
-### Migrating from linux_router / ufw
-
-| linux_router / ufw                             | opnsense_router                                                                 |
-|------------------------------------------------|---------------------------------------------------------------------------------|
-| `ufw_default_policy_incoming: deny`            | built-in default deny on WAN                                                    |
-| `ufw_default_policy_routed: deny` + NAT allows | rule `interface: [lan]`, `source_net: <alias>`                                  |
-| `server_lan_nat: true`                         | automatic outbound NAT (nothing to configure)                                   |
-| `ufw_nat_rules`                                | `opnsense_router_nat_source` + outbound NAT in _hybrid_ mode                    |
-| `ufw_group_rules` / `ufw_host_rules`           | `opnsense_router_rules` (`from_ip` → `source_net`, `port` → `destination_port`) |
-| netplan routes                                 | `opnsense_router_gateways` + `opnsense_router_routes`                           |
-| `net.ipv4.ip_forward`                          | inherent                                                                        |
