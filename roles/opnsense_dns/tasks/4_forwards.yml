@@ -1,0 +1,18 @@
+---
+# Upstreams become forwards without a domain, i.e. for every query Unbound
+# isn't authoritative for.
+- name: Manage query forwarding
+  oxlorg.opnsense.unbound_forward:
+    domain: "{{ item.domain | default(omit, true) }}"
+    target: "{{ item.target }}"
+    port: "{{ item.port | default(omit) }}"
+    forward_tcp: "{{ item.forward_tcp | default(omit) }}"
+    enabled: "{{ item.enabled | default(omit) }}"
+    state: "{{ item.state | default(omit) }}"
+    reload: false
+  loop: >-
+    {{ opnsense_dns_upstreams | map('community.general.dict_kv', 'target') | list
+       + opnsense_dns_forwards }}
+  loop_control:
+    label: "{{ item.domain | default('.', true) }} -> {{ item.target }}"
+  register: _opnsense_dns_forwards_result

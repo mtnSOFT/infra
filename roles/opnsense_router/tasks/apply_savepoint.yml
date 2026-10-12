@@ -1,0 +1,18 @@
+---
+# Lockout guard for staged NAT/filter changes. "apply" activates them and arms
+# OPNsense's own 60s timer that reverts to the savepoint. Only a successful
+# cancel_rollback - an API call that has to make it through the new ruleset -
+# keeps them. If the change cut the controller off, that call fails and the
+# firewall restores the previous rules by itself.
+- name: Apply staged {{ _opnsense_router_controller }} changes
+  oxlorg.opnsense.savepoint:
+    action: apply
+    controller: "{{ _opnsense_router_controller }}"
+    revision: "{{ _opnsense_router_revision }}"
+
+- name: Confirm {{ _opnsense_router_controller }} changes (cancel rollback)
+  oxlorg.opnsense.savepoint:
+    action: cancel_rollback
+    controller: "{{ _opnsense_router_controller }}"
+    revision: "{{ _opnsense_router_revision }}"
+    api_retries: 3

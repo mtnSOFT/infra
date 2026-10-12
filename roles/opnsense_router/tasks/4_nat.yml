@@ -1,0 +1,39 @@
+---
+# Staged without reload, then applied through a savepoint - see apply_savepoint.yml.
+- name: Create outbound NAT savepoint
+  oxlorg.opnsense.savepoint:
+    controller: source_nat
+  register: _opnsense_router_nat_savepoint
+  when: opnsense_router_nat_source | length > 0
+
+- name: Manage outbound NAT rules
+  oxlorg.opnsense.nat_source:
+    description: "{{ item.description }}"
+    interface: "{{ item.interface | default(omit) }}"
+    source_net: "{{ item.source_net | default(omit) }}"
+    source_port: "{{ item.source_port | default(omit) }}"
+    destination_net: "{{ item.destination_net | default(omit) }}"
+    destination_port: "{{ item.destination_port | default(omit) }}"
+    protocol: "{{ item.protocol | default(omit) }}"
+    ip_protocol: "{{ item.ip_protocol | default(omit) }}"
+    target: "{{ item.target | default(omit) }}"
+    target_port: "{{ item.target_port | default(omit) }}"
+    no_nat: "{{ item.no_nat | default(omit) }}"
+    static_port: "{{ item.static_port | default(omit) }}"
+    sequence: "{{ item.sequence | default(omit) }}"
+    log: "{{ item.log | default(omit) }}"
+    enabled: "{{ item.enabled | default(omit) }}"
+    state: "{{ item.state | default(omit) }}"
+    match_fields: [description]
+    reload: false
+  loop: "{{ opnsense_router_nat_source }}"
+  loop_control:
+    label: "{{ item.description }}"
+  register: _opnsense_router_nat
+
+- name: Apply outbound NAT with rollback
+  ansible.builtin.import_tasks: apply_savepoint.yml
+  vars:
+    _opnsense_router_controller: source_nat
+    _opnsense_router_revision: "{{ _opnsense_router_nat_savepoint.revision }}"
+  when: _opnsense_router_nat is changed

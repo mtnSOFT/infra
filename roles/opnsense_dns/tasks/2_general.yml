@@ -1,0 +1,18 @@
+---
+# Fixed baseline: listen on every interface on port 53, no DNSSEC, no DHCP or
+# IPv6 registration. Parameters not listed are reset to the module's defaults,
+# so changes made in the GUI are reverted on every run.
+- name: Manage Unbound general settings
+  oxlorg.opnsense.unbound_general:
+    enabled: true
+    port: 53
+    # Empty = all interfaces.
+    interfaces: []
+    dnssec: false
+    register_dhcp_leases: false
+    register_dhcp_static_mappings: false
+    register_ipv6_link_local: false
+    # The collection's documented default is misspelled ("transparant").
+    local_zone_type: transparent
+    reload: false
+  register: _opnsense_dns_general_result

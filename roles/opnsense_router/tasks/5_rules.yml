@@ -1,0 +1,24 @@
+---
+# Staged without reload, then applied through a savepoint - see apply_savepoint.yml.
+- name: Create filter savepoint
+  oxlorg.opnsense.savepoint:
+    controller: filter
+  register: _opnsense_router_rules_savepoint
+  when: opnsense_router_rules | length > 0 or opnsense_router_purge | bool
+
+- name: Manage filter rules
+  oxlorg.opnsense.rule_multi:
+    rules: "{{ opnsense_router_rules }}"
+    match_fields: [description]
+    multi_control:
+      purge_unconfigured: "{{ opnsense_router_purge | bool }}"
+    reload: false
+  register: _opnsense_router_rules
+  when: opnsense_router_rules | length > 0 or opnsense_router_purge | bool
+
+- name: Apply filter rules with rollback
+  ansible.builtin.import_tasks: apply_savepoint.yml
+  vars:
+    _opnsense_router_controller: filter
+    _opnsense_router_revision: "{{ _opnsense_router_rules_savepoint.revision }}"
+  when: _opnsense_router_rules is changed
