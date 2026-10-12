@@ -1,23 +1,19 @@
 ---
-- name: Validate OPNsense API credentials
+# Same API user and CA as opnsense_router, so both are checked in one go.
+- name: Validate the OPNsense API connection
   ansible.builtin.assert:
     that:
       - opnsense_dns_api_key | length > 0
       - opnsense_dns_api_secret | length > 0
+      - _ca_file is file
     fail_msg: >-
-      Set opnsense_router_api_key and opnsense_router_api_secret (or the
-      opnsense_dns_* overrides) from the vault for {{ inventory_hostname }} -
-      see the opnsense_router README.
+      Needs opnsense_router_api_key and opnsense_router_api_secret (or the
+      opnsense_dns_* overrides) from the vault, and the CA that signed the
+      firewall's web certificate (PEM) at {{ _ca_file }} - see the
+      opnsense_router README.
     quiet: true
-
-- name: Validate the OPNsense CA file
-  ansible.builtin.assert:
-    that:
-      - (inventory_dir ~ '/host_vars/' ~ inventory_hostname ~ '/opnsense_ca.pem') is file
-    fail_msg: >-
-      Save the CA that signed the firewall's web certificate (PEM) as
-      {{ inventory_dir }}/host_vars/{{ inventory_hostname }}/opnsense_ca.pem.
-    quiet: true
+  vars:
+    _ca_file: "{{ inventory_dir }}/host_vars/{{ inventory_hostname }}/opnsense_ca.pem"
 
 - name: Validate required fields of host overrides and aliases
   ansible.builtin.assert:
