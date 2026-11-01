@@ -21,3 +21,6 @@ testhost-ubuntu-24.04
 
 [dyndns_clients]
 testhost-ubuntu-24.04
+
+[gatus]
+testhost-ubuntu-24.04

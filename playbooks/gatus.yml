@@ -1,0 +1,7 @@
+---
+- name: Apply gatus role
+  hosts: gatus
+  become: true
+  roles:
+    - docker-compose
+    - gatus

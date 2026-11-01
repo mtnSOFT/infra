@@ -1,0 +1,57 @@
+---
+# The role has no required secrets, so there is no vault file for this group.
+- name: Converge
+  hosts: gatus
+  become: true
+  vars:
+    # The test container has no docker daemon, so the stack is not brought up -
+    # this scenario verifies the rendered configuration, which is where the
+    # role's logic lives.
+    gatus_deploy: false
+    gatus_bind_ip: "10.10.0.1"
+    # Exercise every optional branch: host alerts, extra hosts with per-host
+    # overrides, endpoint defaults, the certificate expiry injection (added,
+    # opted out, already present, not TLS) and an alerting block.
+    gatus_host_alerts:
+      - type: ntfy
+    gatus_extra_hosts:
+      - name: apphost
+        address: 192.0.2.10
+        ssh_port: 2222
+      - name: labhost
+        address: 192.0.2.20
+        ssh: false
+    gatus_endpoint_defaults:
+      interval: 5m
+    gatus_endpoints:
+      - name: website
+        group: Services
+        url: "https://example.com"
+        conditions: ["[STATUS] == 200"]
+      - name: internal
+        group: Services
+        url: "https://int.example.com"
+        certificate_check: false
+        client:
+          insecure: true
+        conditions: ["[STATUS] == 200"]
+      - name: certificate
+        group: Certificates
+        url: "tls://example.com:443"
+        interval: 1h
+        conditions:
+          - "[CONNECTED] == true"
+          - "[CERTIFICATE_EXPIRATION] > 720h"
+      - name: resolver
+        group: Services
+        url: "192.0.2.53"
+        dns:
+          query-name: "example.com"
+          query-type: "A"
+        conditions: ["[DNS_RCODE] == NOERROR"]
+    gatus_alerting:
+      ntfy:
+        url: "https://ntfy.example.com"
+        topic: "infra"
+  roles:
+    - gatus
