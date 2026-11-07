@@ -10,6 +10,7 @@
       - ssh
       - cron
       - dnsutils
+      - iputils-ping
       - ufw
     state: present
 
