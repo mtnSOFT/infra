@@ -19,11 +19,18 @@
   loop: "{{ netplan_configs.files }}"
   when: netplan_configs.matched > 0
 
-- name: Remove default netplan config if host has custom configs
+- name: Remove default netplan configs if host has custom configs
   file:
-    path: /etc/netplan/50-cloud-init.yaml
+    path: "/etc/netplan/{{ default_config }}"
     state: absent
-  when: netplan_configs.matched > 0
+  loop_control:
+    loop_var: default_config
+  loop:
+    - 00-installer-config.yaml
+    - 50-cloud-init.yaml
+  when:
+    - netplan_configs.matched > 0
+    - default_config not in (netplan_configs.files | map(attribute='path') | map('basename') | list)
 
 - name: Validate netplan configuration
   command: netplan try --timeout=10

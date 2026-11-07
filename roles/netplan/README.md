@@ -6,7 +6,7 @@ Deploys per-host netplan network configuration.
 
 - Installs `netplan.io`
 - Copies all `*.yaml` configs from `inventories/<env>/netplan_configs/<hostname>/` to `/etc/netplan`
-- Removes the default `50-cloud-init.yaml` when custom configs exist
+- Removes the default `00-installer-config.yaml` and `50-cloud-init.yaml` when custom configs exist (unless the host ships a file with the same name)
 - Validates with `netplan try` then runs `netplan apply`
 
 ## Tasks
