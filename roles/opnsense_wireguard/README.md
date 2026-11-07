@@ -43,8 +43,8 @@ something changed.
 The API connection (`opnsense_wireguard_api_*`, `opnsense_wireguard_ssl_verify`)
 defaults to the `opnsense_router_*` variables: same firewall, same API user. The
 API user needs privileges for _VPN: WireGuard_. Like opnsense_router, the role
-trusts the CA in `<inventory>/host_vars/<host>/opnsense_ca.pem` if that file
-exists.
+verifies the web certificate against the CA in
+`<inventory>/host_vars/<host>/opnsense_ca.pem` and fails if that file is missing.
 
 - `opnsense_wireguard_private_key` / `opnsense_wireguard_public_key`: the
   instance key pair (vault, no default)

@@ -15,6 +15,15 @@
       opnsense_wireguard_name of letters, digits, ".", "_" and "-".
     quiet: true
 
+- name: Validate the OPNsense CA file
+  ansible.builtin.assert:
+    that:
+      - (inventory_dir ~ '/host_vars/' ~ inventory_hostname ~ '/opnsense_ca.pem') is file
+    fail_msg: >-
+      Save the CA that signed the firewall's web certificate (PEM) as
+      {{ inventory_dir }}/host_vars/{{ inventory_hostname }}/opnsense_ca.pem.
+    quiet: true
+
 # wireguard_clients generates and derives client keys with `wg` on the play's
 # target - for this API-only play that is the controller.
 - name: Check that the controller has wireguard-tools
