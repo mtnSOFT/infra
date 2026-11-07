@@ -1,12 +1,14 @@
 # wireguard
 
 Installs and configures a WireGuard VPN server and generates client configs.
+Being replaced by [opnsense_wireguard](../opnsense_wireguard/README.md).
 
 ## What it does
 
 - Installs WireGuard on the server
 - Generates the server interface config (keys are reused if they already exist)
-- Generates per-client configs (`all` = full tunnel, `lan` = split tunnel)
+- Generates per-client configs (`all` = full tunnel, `lan` = split tunnel) via
+  the shared [wireguard_clients](../wireguard_clients/README.md) role
 - Stores client + server configs encrypted with ansible-vault in the local inventory
 - NAT/forwarding for WireGuard is handled by the [ufw](../ufw/README.md) role
 
