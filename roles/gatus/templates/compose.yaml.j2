@@ -1,0 +1,22 @@
+# Ansible managed
+#
+# One service, SQLite inside the data directory. The published port is bound to
+# an explicit host IP, never the wildcard: docker publishes via DNAT and
+# bypasses UFW's INPUT chain, so the bind address is the access control.
+#
+# No container_name: that would claim a global docker name and collide with any
+# container of the same name outside this project. Compose names it
+# gatus-gatus-1 instead.
+services:
+  gatus:
+    image: {{ gatus_image }}:{{ gatus_version_tag }}
+    environment:
+      TZ: "{{ timezone | default('UTC') }}"
+      GATUS_CONFIG_PATH: "/config/config.yaml"
+    volumes:
+      # Directory mount so Gatus' hot reload sees the re-rendered file
+      - "{{ gatus_dir }}/config:/config:ro"
+      - "{{ gatus_dir }}/data:/data"
+    ports:
+      - "{{ gatus_bind_ip }}:{{ gatus_port }}:8080"
+    restart: unless-stopped

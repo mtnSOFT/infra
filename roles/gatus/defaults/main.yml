@@ -1,0 +1,77 @@
+---
+# Where the compose project, the rendered config and the SQLite database live
+gatus_dir: "/containers/gatus"
+
+# Bring the stack up with `docker compose`. Set false to render the
+# configuration only - that is what the molecule scenario does, since the test
+# container has no docker daemon.
+gatus_deploy: true
+
+# Container image and tag. `latest` matches the repo convention, but pin this
+# in inventory.
+gatus_image: "twinproduction/gatus"
+gatus_version_tag: "latest"
+
+# Host IP and port the web UI (and /metrics) is published on. Docker's published
+# ports are DNAT'd and bypass UFW's INPUT chain, so this binding - not the
+# firewall - is what limits who can reach the dashboard.
+gatus_bind_ip: "127.0.0.1"
+gatus_port: 8080
+
+# Expose Prometheus metrics on /metrics of the web port
+gatus_metrics: true
+
+# Rendered verbatim as Gatus' `ui:` block (title, header, logo, link, ...)
+gatus_ui:
+  title: "Status"
+
+# --- Inventory hosts --------------------------------------------------------
+# Every host in the inventory (groups['all']) gets a ping and an SSH check.
+# Per host, `gatus_ping: false` / `gatus_ssh: false` drop one of the two.
+# Opt a host out with `gatus_inventory_hosts_exclude` or by setting the host
+# var `gatus_monitor: false`.
+gatus_inventory_hosts: true
+gatus_inventory_hosts_exclude: []
+
+# Gatus group the generated host checks are listed under, and their cadence
+gatus_host_group: "Hosts"
+gatus_host_interval: "1m"
+
+# Which checks to generate per host: ICMP echo, and a TCP connect to the SSH
+# port (the host's `sshd_port`, else 22)
+gatus_host_ping: true
+gatus_host_ssh: true
+
+# Alerts attached to every generated host check, e.g. [{type: ntfy}]. Each
+# type must be configured in gatus_alerting.
+gatus_host_alerts: []
+
+# Hosts outside the inventory that get the same ping/SSH checks:
+#   - name: apphost          # shown in the UI
+#     address: 192.0.2.10    # IP or DNS name
+#     ssh_port: 2222         # optional, default 22
+#     ping: true             # optional, default gatus_host_ping
+#     ssh: false             # optional, default gatus_host_ssh
+gatus_extra_hosts: []
+
+# --- Services ---------------------------------------------------------------
+# Native Gatus endpoint definitions (https://github.com/TwiN/gatus#endpoints),
+# rendered as-is: HTTP(S), tcp://, udp://, icmp://, dns, tls://, starttls://, ...
+# The only role-specific key is `certificate_check: false` (see below).
+gatus_endpoints: []
+
+# Keys merged under every gatus_endpoints entry (shallow - an endpoint's own
+# `alerts` replaces these, it does not extend them), e.g. interval or alerts.
+gatus_endpoint_defaults: {}
+
+# Certificate expiry check. Gatus already fails https:// endpoints whose chain
+# or hostname does not verify; on top of that, every https://, tls:// and
+# starttls:// endpoint without its own CERTIFICATE_EXPIRATION condition gets
+# `[CERTIFICATE_EXPIRATION] > <this>`. Opt out per endpoint with
+# `certificate_check: false`, or globally by setting this to "".
+gatus_certificate_expiration_min: "336h"
+
+# --- Alerting ---------------------------------------------------------------
+# Rendered verbatim as Gatus' `alerting:` block (ntfy, email, slack, ...).
+# Secrets belong in vault; the rendered config is 0600.
+gatus_alerting: {}

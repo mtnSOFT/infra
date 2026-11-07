@@ -1,0 +1,59 @@
+{#- Hosts to ping/SSH-check: the inventory, then gatus_extra_hosts. An inventory
+    host is addressed by ansible_host, else <host>.<internal_zone_name>, else
+    its inventory name. A namespace carries the lists out of the loops. -#}
+{%- set ns = namespace(hosts=[], endpoints=[]) -%}
+{%- if gatus_inventory_hosts | bool -%}
+{%-   for name in groups['all'] | difference(gatus_inventory_hosts_exclude) | sort -%}
+{%-     set hv = hostvars[name] -%}
+{%-     if hv.gatus_monitor | default(true) | bool -%}
+{%-       set ns.hosts = ns.hosts + [{
+            'name': name,
+            'address': hv.ansible_host | default(name ~ '.' ~ hv.internal_zone_name if hv.internal_zone_name is defined else name),
+            'ssh_port': hv.sshd_port | default(22),
+            'ping': hv.gatus_ping | default(gatus_host_ping),
+            'ssh': hv.gatus_ssh | default(gatus_host_ssh),
+          }] -%}
+{%-     endif -%}
+{%-   endfor -%}
+{%- endif -%}
+
+{%- set common = {'group': gatus_host_group, 'interval': gatus_host_interval, 'conditions': ['[CONNECTED] == true']} -%}
+{%- if gatus_host_alerts -%}
+{%-   set common = common | combine({'alerts': gatus_host_alerts}) -%}
+{%- endif -%}
+{%- for host in ns.hosts + gatus_extra_hosts -%}
+{%-   if host.ping | default(gatus_host_ping) | bool -%}
+{%-     set ns.endpoints = ns.endpoints + [{'name': host.name ~ ' ping', 'url': 'icmp://' ~ host.address} | combine(common)] -%}
+{%-   endif -%}
+{%-   if host.ssh | default(gatus_host_ssh) | bool -%}
+{%-     set ns.endpoints = ns.endpoints + [{'name': host.name ~ ' ssh', 'url': 'tcp://' ~ host.address ~ ':' ~ host.ssh_port | default(22)} | combine(common)] -%}
+{%-   endif -%}
+{%- endfor -%}
+
+{#- Services: defaults merged under each entry, the role-only certificate_check
+    key dropped, and an expiry condition appended to TLS endpoints that do not
+    already carry one. -#}
+{%- for item in gatus_endpoints -%}
+{%-   set endpoint = gatus_endpoint_defaults | combine(item | dict2items | rejectattr('key', 'equalto', 'certificate_check') | items2dict) -%}
+{%-   set conditions = endpoint.conditions | default([]) -%}
+{%-   if gatus_certificate_expiration_min
+        and item.certificate_check | default(true) | bool
+        and endpoint.url | default('') is match('(https|tls|starttls)://')
+        and conditions | select('search', 'CERTIFICATE_EXPIRATION') | list | length == 0 -%}
+{%-     set endpoint = endpoint | combine({'conditions': conditions + ['[CERTIFICATE_EXPIRATION] > ' ~ gatus_certificate_expiration_min]}) -%}
+{%-   endif -%}
+{%-   set ns.endpoints = ns.endpoints + [endpoint] -%}
+{%- endfor -%}
+
+{%- set config = {
+      'metrics': gatus_metrics | bool,
+      'storage': {'type': 'sqlite', 'path': '/data/data.db'},
+      'web': {'port': 8080},
+      'ui': gatus_ui,
+    } -%}
+{%- if gatus_alerting -%}
+{%-   set config = config | combine({'alerting': gatus_alerting}) -%}
+{%- endif -%}
+{%- set config = config | combine({'endpoints': ns.endpoints}) -%}
+# Ansible managed
+{{ config | to_nice_yaml(indent=2, sort_keys=false, width=1000) }}

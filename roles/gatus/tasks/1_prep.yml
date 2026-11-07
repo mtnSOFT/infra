@@ -1,0 +1,39 @@
+---
+# The gatus image runs as root, so everything stays root:root. The config is
+# mounted as a directory rather than a single file: Gatus watches it and
+# reloads on change, and a file bind mount would keep pointing at the old inode
+# after the template module replaces it. That is also why there is no handler.
+- name: Create gatus directory tree
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - path: "{{ gatus_dir }}"
+      mode: "0750"
+    - path: "{{ gatus_dir }}/config"
+      mode: "0750"
+    - path: "{{ gatus_dir }}/data"
+      mode: "0750"
+  loop_control:
+    label: "{{ item.path }}"
+
+# The alerting block may hold webhook URLs, tokens or SMTP passwords.
+- name: Render gatus configuration
+  ansible.builtin.template:
+    src: config.yaml.j2
+    dest: "{{ gatus_dir }}/config/config.yaml"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Render gatus compose file
+  ansible.builtin.template:
+    src: compose.yaml.j2
+    dest: "{{ gatus_dir }}/compose.yaml"
+    owner: root
+    group: root
+    mode: "0644"
