@@ -1,28 +1,24 @@
 ---
-- name: Validate API credentials, instance keys and tunnel address
+# Same API user and CA as opnsense_router, so both are checked in one go.
+- name: Validate API connection, instance keys and tunnel address
   ansible.builtin.assert:
     that:
       - opnsense_wireguard_api_key | length > 0
       - opnsense_wireguard_api_secret | length > 0
+      - _ca_file is file
       - opnsense_wireguard_private_key | default('') | length > 0
       - opnsense_wireguard_public_key | default('') | length > 0
       - wireguard_internal_server_ip is defined
       - opnsense_wireguard_name is match('^[0-9a-zA-Z._-]{1,64}$')
     fail_msg: >-
       opnsense_wireguard needs the API credentials (opnsense_router_api_key /
-      _secret), the instance key pair opnsense_wireguard_private_key /
+      _secret), the CA that signed the firewall's web certificate (PEM) at
+      {{ _ca_file }}, the instance key pair opnsense_wireguard_private_key /
       _public_key from the vault, wireguard_internal_server_ip, and an
       opnsense_wireguard_name of letters, digits, ".", "_" and "-".
     quiet: true
-
-- name: Validate the OPNsense CA file
-  ansible.builtin.assert:
-    that:
-      - (inventory_dir ~ '/host_vars/' ~ inventory_hostname ~ '/opnsense_ca.pem') is file
-    fail_msg: >-
-      Save the CA that signed the firewall's web certificate (PEM) as
-      {{ inventory_dir }}/host_vars/{{ inventory_hostname }}/opnsense_ca.pem.
-    quiet: true
+  vars:
+    _ca_file: "{{ inventory_dir }}/host_vars/{{ inventory_hostname }}/opnsense_ca.pem"
 
 # wireguard_clients generates and derives client keys with `wg` on the play's
 # target - for this API-only play that is the controller.
