@@ -1,83 +1,117 @@
 # borg_server
 
-Stores [borg](https://www.borgbackup.org/) repositories for the hosts running
-[borgmatic_client](../borgmatic_client/README.md). Each client gets one
-repository, reachable only through an SSH forced command that runs `borg serve`
-in append-only mode. Pruning and compacting happen on this host.
+Stores [borg](https://www.borgbackup.org/) repositories on a btrfs backup disk
+for the hosts running [borgmatic_client](../borgmatic_client/README.md), and
+protects them with read-only [btrbk](https://digint.ch/btrbk/) snapshots.
+
+Clients have normal borg access to their own repository: they create, prune and
+compact it themselves, and their passphrase never reaches this host. What keeps
+a compromised client from destroying its backups is the snapshots. It can delete
+its archives, but it can't touch the read-only snapshots on this host.
 
 ## What it does
 
-- Installs `borgbackup` and creates the system user `borg` (home
-  `borg_server_home`, default `/srv/borg`)
+- Installs `borgbackup`, `btrbk` and `btrfs-progs`, and creates the system user
+  `borg` with its home at `/var/lib/borg`, off the backup disk
+- Checks that `borg_server_repos_dir` (`/srv/borg/data`) exists and is a btrfs
+  subvolume, and fails otherwise. **It never creates it.**
 - Finds its clients: hosts in `borg_server_clients_group` (default
   `borgmatic_clients`) whose `borgmatic_client_server` names this host
 - Reads each client's public key **from the client** (`delegate_to`) and renders
   `~borg/.ssh/authorized_keys` with one line per client:
-  `command="borg serve --append-only --restrict-to-repository <repos>/<client>",restrict …`
-- Writes each client's passphrase to `borg_server_passphrase_dir/<client>`
-  (`0400 borg`) and runs `borg init --encryption repokey-blake2` on new
-  repositories
-- Exports each repository key once (`borg key export`) and stores it
-  vault-encrypted on the controller as
-  `borg_server_key_export_dir/<client>.key`, by default
-  `inventories/<env>/borg_keys/` in the private inventory
-- Installs `/usr/local/bin/borg-prune-all.sh` and a daily `borg-prune.timer`
-  that runs `borg prune` + `borg compact` on every client repository
+  `command="borg serve --restrict-to-repository /srv/borg/data/<client>",restrict …`
+- Configures btrbk to snapshot the `data` subvolume into `/srv/borg/.snapshots`
+  (default retention `2d` minimum, then `14d 8w 3m`) and moves the packaged
+  `btrbk.timer` to 06:00
+- Adds a monthly `borg-scrub.timer` that runs `btrfs scrub` on the disk
+
+## Disk setup (once, by hand)
+
+```bash
+mkfs.btrfs -L borg /dev/sdX                   # erases the disk
+mount /dev/disk/by-label/borg /mnt
+btrfs subvolume create /mnt/data              # the repositories: snapshotted
+umount /mnt
+
+mkdir -p /srv/borg
+echo 'LABEL=borg  /srv/borg  btrfs  noatime,nofail  0 0' >> /etc/fstab
+systemctl daemon-reload && mount /srv/borg
+```
+
+Then run the playbook. It fixes ownership of `/srv/borg/data` and creates
+`/srv/borg/.snapshots`.
+
+- **Why `data` is its own subvolume.** btrfs snapshots work per subvolume, and
+  the snapshots shouldn't contain themselves.
+- **Why the repositories aren't directly in `/srv/borg`.** When the disk isn't
+  mounted, `/srv/borg` is an empty directory on the root filesystem, but
+  `/srv/borg/data` doesn't exist. Every client backup then fails with
+  "repository does not exist" instead of quietly filling the root disk, and
+  `borg init` fails too because its parent directory is missing.
+- **No btrfs compression.** borg data is already compressed and encrypted.
 
 ## Gotchas
 
-- **This server holds every repository passphrase.** Append-only clients can't
-  remove data, so pruning has to run here, and `borg prune` needs the key. A
-  compromised server can therefore read the backups. A compromised client can't
-  delete them, which is the trade-off this setup makes.
-- **Append-only is a `borg serve` flag, not a repository setting.** Local `borg`
-  commands on this host (the prune run, or you by hand) have full access.
-- **Append-only protection only lasts until the next compact.** A delete or
-  prune from a compromised client is only logged, and the data stays in the
-  repository until `borg compact` runs here. If you suspect a client was
-  compromised, stop `borg-prune.timer` first, then roll back the transactions as
-  the borg docs on append-only mode describe.
+- **Snapshot retention is how long you have to notice an attack.** A compromised
+  client can delete its archives, and you have to notice before the last good
+  snapshot expires.
+- **Pruned data takes disk space until the snapshots expire.** Client prune and
+  compact free space in borg, but the old segments stay on disk while any
+  snapshot still references them. Size the disk for the borg data plus the
+  churn over the snapshot window.
+- **A snapshot taken during a backup is still usable.** borg treats it like a
+  power cut and rolls the unfinished transaction back the next time the repo is
+  opened. Snapshots run at 06:00, after the default backup window, so this
+  rarely happens anyway.
+- **Scrub only detects corruption on a single disk.** It can't repair data. A
+  failed `borg-scrub.service` means corrupt blocks, so restore the affected
+  repository from a snapshot.
+- **This host holds no passphrases**, so it can't read the backups. The
+  repository keys are exported by the client role into the private inventory.
 - **A client removed from the inventory loses SSH access** on the next run
-  because `authorized_keys` is rendered whole. Its repository and passphrase file
-  stay, and you delete them by hand.
+  because `authorized_keys` is rendered whole. Its repository stays, and you
+  delete it by hand.
 - **Every client must have run `borgmatic_client` at least once** (or at least
   its `2_ssh` tasks), otherwise reading its key fails.
   `playbooks/borg_backup.yml` handles that ordering.
-- **The key export runs only if the key file is missing.** It never overwrites
-  an export. If you re-create a repository, delete the old `.key` file first.
-- **The export needs the vault password non-interactively** because the key is
-  piped into `ansible-vault encrypt` on the controller. That means
-  `ANSIBLE_VAULT_PASSWORD_FILE` or `vault_identity_list` in the config, or a
-  `--vault-id` in `borg_server_key_export_vault_args`. `--ask-vault-pass` alone
-  doesn't work.
-- **Commit the exported keys to the private inventory repo**, not this one.
-- The timer is only enabled where systemd is PID 1. In the molecule container
-  the units are rendered and not enabled.
-- Clients need to reach this host's sshd, so open that port for them in ufw or
-  OPNsense.
+- **Timers are only enabled with systemd and `borg_server_require_btrfs: true`.**
+  The molecule container has neither, so the units are rendered and not
+  enabled.
+- **Firewall:** clients need to reach this host's sshd, so open that port for
+  them in ufw or OPNsense.
+
+## Restoring a client repository from a snapshot
+
+Stop the client's timer first (`systemctl stop borgmatic.timer` on the client),
+then on the server:
+
+```bash
+ls /srv/borg/.snapshots/                      # data.20261201T0600 …
+mv /srv/borg/data/apphost /srv/borg/data/apphost.broken
+cp -a --reflink=always /srv/borg/.snapshots/data.20261201T0600/apphost /srv/borg/data/apphost
+```
+
+`--reflink` makes the copy instant and free. Restart the client timer once
+`borgmatic list` on the client looks right.
 
 ## Key variables
 
-- `borg_server_home`: home of the `borg` user (default `/srv/borg`)
-- `borg_server_repos_dir`: one repository per client below it (default
-  `{{ borg_server_home }}/repos`). Clients read it through hostvars.
-- `borg_server_passphrase_dir`: per-client passphrase files (default
-  `/etc/borg-server`)
+- `borg_server_mount`: where the backup disk is mounted (default `/srv/borg`)
+- `borg_server_repos_dir`: the `data` subvolume holding one repository per
+  client (default `{{ borg_server_mount }}/data`). Clients read it through
+  hostvars.
+- `borg_server_home`: home of the `borg` user (default `/var/lib/borg`)
+- `borg_server_require_btrfs`: fail unless the data directory is a btrfs
+  subvolume, and only enable the timers when it is (default `true`; `false` in
+  molecule)
+- `borg_server_snapshot_preserve` / `_preserve_min`: btrbk retention (default
+  `14d 8w 3m` / `2d`)
+- `borg_server_snapshot_dir`: relative to the mount (default `.snapshots`)
+- `borg_server_snapshot_on_calendar`: btrbk timer time (default
+  `*-*-* 06:00:00`)
+- `borg_server_scrub_on_calendar`: scrub time (default `*-*-01 08:00:00`)
 - `borg_server_clients_group`: group to look for clients in (default
   `borgmatic_clients`)
-- `borg_server_retention`: `keep_daily`/`keep_weekly`/`keep_monthly` (default
-  7/4/6). Clients override any key with `borgmatic_client_retention`.
-- `borg_server_prune_on_calendar`: systemd `OnCalendar` of the prune run (default
-  `*-*-* 05:30:00`)
-- `borg_server_lock_wait`: seconds the prune waits for a running backup (default
-  600)
-- `borg_server_encryption`: mode for new repositories (default `repokey-blake2`)
-- `borg_server_key_export`: export repository keys to the controller (default
-  `true`)
-- `borg_server_key_export_dir`: where they go (default
-  `{{ inventory_dir }}/borg_keys`)
-- `borg_server_key_export_vault_args`: extra `ansible-vault encrypt` arguments
-  (default empty)
 
 ## Usage
 
@@ -92,19 +126,10 @@ apphost
 dnshost
 ```
 
-### Restoring after the repository config is lost
-
-You need the repository data, the passphrase from vault and the exported key:
-
-```bash
-ansible-vault view inventories/production/borg_keys/apphost.key > /tmp/apphost.key
-borg key import /srv/borg/repos/apphost /tmp/apphost.key   # on the server, as borg
-shred -u /tmp/apphost.key
-```
-
 To check by hand on the server:
 
 ```bash
-systemctl list-timers borg-prune.timer
-systemctl start borg-prune.service && journalctl -u borg-prune -n 50
+systemctl list-timers btrbk.timer borg-scrub.timer
+btrbk list snapshots
+btrfs scrub status /srv/borg
 ```

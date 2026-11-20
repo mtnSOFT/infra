@@ -1,0 +1,26 @@
+---
+# borg itself rather than `borgmatic rcreate`, whose skip-if-exists output is not
+# something to hang changed_when on. The passphrase reaches borg through a
+# command reading the 0600 file, never through this task's arguments.
+- name: Check whether the borg repository exists
+  ansible.builtin.command:
+    cmd: "borg info {{ borgmatic_client_repository }}"
+  environment: &borg_env
+    BORG_RSH: "ssh -i {{ borgmatic_client_ssh_key }} -o BatchMode=yes"
+    BORG_PASSCOMMAND: "cat /etc/borgmatic/passphrase"
+  register: borgmatic_client_repo_info
+  changed_when: false
+  failed_when:
+    - borgmatic_client_repo_info.rc != 0
+    - "'does not exist' not in borgmatic_client_repo_info.stderr"
+  no_log: false
+
+# No --make-parent-dirs: when the server's backup disk is not mounted, the parent
+# directory is missing and this fails - instead of creating the repository on
+# the server's root filesystem.
+- name: Create the borg repository
+  ansible.builtin.command:
+    cmd: "borg init --encryption {{ borgmatic_client_encryption }} {{ borgmatic_client_repository }}"
+  environment: *borg_env
+  when: borgmatic_client_repo_info.rc != 0
+  no_log: false

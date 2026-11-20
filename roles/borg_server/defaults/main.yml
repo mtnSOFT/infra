@@ -1,45 +1,44 @@
 ---
-# Home of the borg user. Clients connect as borg@<this host> and borg serve runs
-# with this as its working directory.
-borg_server_home: "/srv/borg"
+# Home of the borg user: SSH config and authorized_keys. Deliberately not on the
+# backup disk, so SSH keeps working when the disk is missing and clients fail
+# with "repository does not exist" instead of a login error.
+borg_server_home: "/var/lib/borg"
+
+# Where the btrfs backup disk is mounted (see README for the one-time setup).
+borg_server_mount: "/srv/borg"
 
 # One repository per client below this directory, named after the client's
-# inventory_hostname. Clients read this value through hostvars to build their
-# repository URL, so override it in the inventory, not with -e on one play.
-borg_server_repos_dir: "{{ borg_server_home }}/repos"
+# inventory_hostname. It is a btrfs subvolume on the backup disk and only exists
+# while the disk is mounted - which is the whole point: an unmounted disk makes
+# every backup fail instead of quietly filling the root filesystem. The role
+# never creates it.
+#
+# Clients read this value through hostvars to build their repository URL, so
+# override it in the inventory, not with -e on one play.
+borg_server_repos_dir: "{{ borg_server_mount }}/data"
 
-# Holds one passphrase file per client (0400 borg). The server needs them because
-# clients are append-only and pruning runs here - see README "Gotchas".
-borg_server_passphrase_dir: "/etc/borg-server"
+# Fail unless borg_server_repos_dir is a btrfs subvolume, and only enable the
+# snapshot and scrub timers when it is. false in molecule: the container cannot
+# mount btrfs.
+borg_server_require_btrfs: true
 
 # Inventory group whose hosts are backup clients. Only clients whose
 # borgmatic_client_server names this host are served by it.
 borg_server_clients_group: "borgmatic_clients"
 
-# Encryption mode for repositories this role creates. Changing it affects new
-# repositories only; borg cannot convert an existing one.
-borg_server_encryption: "repokey-blake2"
+# btrbk snapshots of borg_server_repos_dir, read-only and out of every client's
+# reach. This is what protects against a compromised client deleting its own
+# archives: snapshot_preserve is the window you have to notice. Syntax per the
+# btrbk.conf man page.
+borg_server_snapshot_dir: ".snapshots"
+borg_server_snapshot_preserve_min: "2d"
+borg_server_snapshot_preserve: "14d 8w 3m"
 
-# Export each repository key once, vault-encrypted, to the controller - see
-# tasks/3_key-export.yml. The default puts it next to the hosts file of the
-# inventory in use, e.g. inventories/production/borg_keys/<client>.key.
-borg_server_key_export: true
-borg_server_key_export_dir: "{{ inventory_dir }}/borg_keys"
+# After the client backup window (02:00 + up to 1h random delay by default). A
+# snapshot taken mid-backup is still fine - borg sees it like a power cut and
+# rolls the unfinished transaction back - but there is no reason to provoke it.
+borg_server_snapshot_on_calendar: "*-*-* 06:00:00"
 
-# Extra arguments for the controller-side `ansible-vault encrypt`, e.g.
-# "--vault-id prod@~/.vault_pass". Empty uses the controller's vault config.
-borg_server_key_export_vault_args: ""
-
-# Retention applied by the server-side prune. A client overrides any of these
-# with borgmatic_client_retention, e.g. {keep_daily: 14}.
-borg_server_retention:
-  keep_daily: 7
-  keep_weekly: 4
-  keep_monthly: 6
-
-# systemd OnCalendar of the prune + compact run. Placed well after the default
-# client backup window (02:00 + up to 1h random delay); a prune that overlaps a
-# running backup waits on the repository lock for up to
-# borg_server_lock_wait seconds.
-borg_server_prune_on_calendar: "*-*-* 05:30:00"
-borg_server_lock_wait: 600
+# Monthly btrfs scrub of the backup disk. On a single disk it detects bit rot
+# but cannot repair data; a failure shows up as a failed systemd unit.
+borg_server_scrub_on_calendar: "*-*-01 08:00:00"

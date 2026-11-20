@@ -1,0 +1,55 @@
+---
+# With repokey encryption the key lives only in the repository's config file: if
+# that file is damaged, the passphrase alone cannot decrypt anything. The key is
+# exported once into the (private) inventory, vault-encrypted, next to the
+# passphrase it belongs to.
+#
+# Only a missing file is exported, so an existing export is never overwritten
+# and repositories created before this task existed are picked up on the next run.
+
+- name: Check for an existing borg key export
+  ansible.builtin.stat:
+    path: "{{ borgmatic_client_key_export_dir }}/{{ inventory_hostname }}.key"
+  delegate_to: localhost
+  become: false
+  register: borgmatic_client_key_export_stat
+  when: borgmatic_client_key_export | bool
+
+- name: Export and store the borg repository key
+  when:
+    - borgmatic_client_key_export | bool
+    - not borgmatic_client_key_export_stat.stat.exists
+  block:
+    - name: Create the borg key export directory
+      ansible.builtin.file:
+        path: "{{ borgmatic_client_key_export_dir }}"
+        state: directory
+        mode: "0700"
+      delegate_to: localhost
+      become: false
+
+    # Prints the stored key, which is itself still passphrase-encrypted; no
+    # passphrase needed.
+    - name: Export the borg repository key
+      ansible.builtin.command:
+        cmd: "borg key export {{ borgmatic_client_repository }}"
+      environment:
+        BORG_RSH: "ssh -i {{ borgmatic_client_ssh_key }} -o BatchMode=yes"
+      register: borgmatic_client_exported_key
+      changed_when: false
+
+    # Encrypted from stdin straight into the target file, so the key never
+    # touches the controller's disk in plain text. Uses the controller's vault
+    # configuration (ANSIBLE_VAULT_PASSWORD_FILE or vault_identity_list);
+    # --ask-vault-pass cannot work here because stdin carries the key - pass a
+    # --vault-id through borgmatic_client_key_export_vault_args instead.
+    - name: Store the borg repository key vault-encrypted in the inventory
+      ansible.builtin.command:
+        cmd: >-
+          ansible-vault encrypt {{ borgmatic_client_key_export_vault_args }}
+          --output {{ borgmatic_client_key_export_dir }}/{{ inventory_hostname }}.key -
+        stdin: "{{ borgmatic_client_exported_key.stdout }}"
+        creates: "{{ borgmatic_client_key_export_dir }}/{{ inventory_hostname }}.key"
+      delegate_to: localhost
+      become: false
+      no_log: true

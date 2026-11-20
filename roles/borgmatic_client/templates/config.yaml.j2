@@ -1,6 +1,6 @@
 # {{ ansible_managed }}
-# borgmatic 1.8 flat configuration. No keep_* options: the repository is
-# append-only for this host, retention is applied by the borg server.
+# borgmatic 1.8 flat configuration. Pruned archives stay recoverable from the
+# borg server's btrfs snapshots for as long as those are kept.
 
 source_directories:
 {% for dir in borgmatic_client_source_directories %}
@@ -8,7 +8,7 @@ source_directories:
 {% endfor %}
 
 repositories:
-  - path: "ssh://borg@{{ borgmatic_client_server_address }}:{{ borgmatic_client_server_port }}{{ borgmatic_client_server_repos_dir }}/{{ inventory_hostname }}"
+  - path: {{ borgmatic_client_repository | to_json }}
     label: {{ borgmatic_client_server | to_json }}
 
 {% if borgmatic_client_exclude_patterns %}
@@ -26,6 +26,10 @@ archive_name_format: "{hostname}-{now:%Y-%m-%dT%H:%M:%S}"
 encryption_passcommand: "cat /etc/borgmatic/passphrase"
 ssh_command: "ssh -i {{ borgmatic_client_ssh_key }} -o BatchMode=yes"
 lock_wait: 600
+
+{% for key, value in borgmatic_client_retention.items() | sort %}
+{{ key }}: {{ value }}
+{% endfor %}
 
 checks:
   - name: repository

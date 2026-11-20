@@ -1,7 +1,7 @@
 ---
 # Three plays because of the SSH key exchange: clients generate their key, the
-# server authorizes every client key and creates the repositories, then clients
-# get their borgmatic config and timer.
+# server authorizes every client key, then clients get their config, create their
+# repository over that SSH access and enable their timer.
 
 - name: Prepare borgmatic clients (packages + SSH key)
   hosts: borgmatic_clients

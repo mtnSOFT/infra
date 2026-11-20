@@ -1,18 +1,31 @@
 ---
 # One container plays server and client (inventories/test/group_vars/
-# borgmatic_clients/). It has no systemd, so the timers are rendered but not
-# enabled; the tests start sshd by hand and run a real backup over SSH.
+# borgmatic_clients/). It has no systemd and cannot mount btrfs, so the timers
+# are rendered but not enabled and the "backup disk" is a plain directory.
 - name: Prepare the borg server
   hosts: borg_servers
   become: true
   tasks:
-    # A real server already runs sshd; the container needs it for the host key
-    # the client role reads, and for the live backup in the tests.
+    # A real server already runs sshd. The container needs it for the host key
+    # the client role reads, and to serve the client's borg connections.
     - name: Install openssh-server for testing
       ansible.builtin.apt:
         name: openssh-server
         state: present
         update_cache: true
+
+    - name: Start sshd for testing
+      ansible.builtin.shell:
+        cmd: mkdir -p /run/sshd && (pgrep -x sshd || /usr/sbin/sshd)
+      changed_when: false
+
+    # Stands in for the subvolume on the btrfs disk, which the role deliberately
+    # never creates (README "Disk setup").
+    - name: Create the borg data directory for testing
+      ansible.builtin.file:
+        path: /srv/borg/data
+        state: directory
+        mode: "0700"
 
 - name: Run the borg_backup playbook
   ansible.builtin.import_playbook: ../../playbooks/borg_backup.yml

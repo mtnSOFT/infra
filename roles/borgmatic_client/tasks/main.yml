@@ -3,7 +3,9 @@
 # To add a task file, drop it in this folder and add an import below.
 #
 # 1_install and 2_ssh have to run before the borg_server role (it reads the key
-# 2_ssh generates); playbooks/borg_backup.yml handles that ordering.
+# 2_ssh generates), and 4_repository after it (it connects through the
+# authorized_keys entry the server renders). playbooks/borg_backup.yml handles
+# that ordering.
 
 - import_tasks: 1_install.yml
   tags: [install]
@@ -14,5 +16,11 @@
 - import_tasks: 3_config.yml
   tags: [config]
 
-- import_tasks: 4_timer.yml
+- import_tasks: 4_repository.yml
+  tags: [repository]
+
+- import_tasks: 5_key-export.yml
+  tags: [key-export]
+
+- import_tasks: 6_timer.yml
   tags: [timer]

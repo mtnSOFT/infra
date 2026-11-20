@@ -6,7 +6,7 @@ After=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/borgmatic --verbosity -2 --syslog-verbosity 1 create --stats check
+ExecStart=/usr/bin/borgmatic --verbosity -2 --syslog-verbosity 1 create --stats prune compact check
 Nice=19
 IOSchedulingClass=best-effort
 IOSchedulingPriority=7

@@ -14,3 +14,7 @@ borgmatic_client_source_directories:
 
 borgmatic_client_retention:
   keep_daily: 3
+
+# Keep the key export out of the repo: write it into molecule's ephemeral
+# directory, where molecule/borg_backup/tests/ checks it.
+borgmatic_client_key_export_dir: "{{ lookup('ansible.builtin.env', 'MOLECULE_EPHEMERAL_DIRECTORY') }}/borg_keys"

@@ -1,0 +1,59 @@
+---
+# Safe to create: 1_install has already checked that the backup disk is there.
+- name: Create the snapshot directory
+  ansible.builtin.file:
+    path: "{{ borg_server_mount }}/{{ borg_server_snapshot_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Create the btrbk configuration directory
+  ansible.builtin.file:
+    path: /etc/btrbk
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Render the btrbk configuration
+  ansible.builtin.template:
+    src: btrbk.conf.j2
+    dest: /etc/btrbk/btrbk.conf
+    owner: root
+    group: root
+    mode: "0644"
+
+# The btrbk package ships btrbk.service and a daily btrbk.timer; only the time
+# is overridden. The empty OnCalendar= clears the packaged value first.
+- name: Create the btrbk timer drop-in directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/btrbk.timer.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Set the btrbk snapshot time
+  ansible.builtin.copy:
+    content: |
+      # {{ ansible_managed }}
+      [Timer]
+      OnCalendar=
+      OnCalendar={{ borg_server_snapshot_on_calendar }}
+    dest: /etc/systemd/system/btrbk.timer.d/override.conf
+    owner: root
+    group: root
+    mode: "0644"
+
+# Skipped where systemd is not PID 1 or there is no btrfs, e.g. the molecule
+# container.
+- name: Enable the btrbk timer
+  ansible.builtin.systemd_service:
+    name: btrbk.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+  when:
+    - ansible_facts.service_mgr == 'systemd'
+    - borg_server_require_btrfs | bool

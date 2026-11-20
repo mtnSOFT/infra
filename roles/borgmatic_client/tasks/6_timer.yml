@@ -1,7 +1,6 @@
 ---
-# Own units instead of the ones the Debian package ships, so the actions are
-# pinned to create + check: prune and compact would only fail against an
-# append-only repository, they run on the server.
+# Own units instead of the ones the Debian package ships, so the actions, the
+# niceness and the schedule are in one place under this role's control.
 - name: Render the borgmatic systemd units
   ansible.builtin.template:
     src: "{{ item }}.j2"

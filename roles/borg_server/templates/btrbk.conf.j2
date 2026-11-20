@@ -1,0 +1,12 @@
+# {{ ansible_managed }}
+# Read-only snapshots of the borg repositories. A client can delete its own
+# archives; it cannot touch these. Restore procedure: roles/borg_server/README.md
+
+timestamp_format        long
+snapshot_create         always
+snapshot_preserve_min   {{ borg_server_snapshot_preserve_min }}
+snapshot_preserve       {{ borg_server_snapshot_preserve }}
+snapshot_dir            {{ borg_server_snapshot_dir }}
+
+volume {{ borg_server_mount }}
+  subvolume {{ borg_server_repos_dir | relpath(borg_server_mount) }}

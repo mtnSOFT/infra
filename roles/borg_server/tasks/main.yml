@@ -1,5 +1,5 @@
 ---
-# Task files run in order. Tags let you run a subset, e.g. `--tags clients`.
+# Task files run in order. Tags let you run a subset, e.g. `--tags snapshots`.
 # To add a task file, drop it in this folder and add an import below.
 
 - import_tasks: 1_install.yml
@@ -8,8 +8,8 @@
 - import_tasks: 2_clients.yml
   tags: [clients]
 
-- import_tasks: 3_key-export.yml
-  tags: [key-export]
+- import_tasks: 3_snapshots.yml
+  tags: [snapshots]
 
-- import_tasks: 4_prune.yml
-  tags: [prune]
+- import_tasks: 4_scrub.yml
+  tags: [scrub]

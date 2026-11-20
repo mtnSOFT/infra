@@ -1,0 +1,11 @@
+# {{ ansible_managed }}
+[Unit]
+Description=btrfs scrub of the borg backup disk
+RequiresMountsFor={{ borg_server_mount }}
+
+[Service]
+Type=oneshot
+# -B: stay in the foreground so the unit fails when the scrub finds errors.
+ExecStart=/usr/bin/btrfs scrub start -B {{ borg_server_mount }}
+Nice=19
+IOSchedulingClass=idle

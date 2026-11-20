@@ -7,33 +7,53 @@ repository on a [borg_server](../borg_server/README.md), on a systemd timer.
 
 - Installs `borgbackup`, `borgmatic` and `openssh-client` from apt (Ubuntu 24.04
   ships borgmatic 1.8, which uses the flat config format)
-- Generates `/root/.ssh/borg_ed25519` once. The server reads it and pins it to
-  `borg serve --append-only` on this host's repository.
+- Generates `/root/.ssh/borg_ed25519` once. The server pins it to `borg serve`
+  on this host's repository.
 - Reads the server's ed25519 host key from the server itself and adds it to
   root's `known_hosts`, so the first connection never trusts an unknown key
 - Writes `/etc/borgmatic/passphrase` (`0600`) and `/etc/borgmatic/config.yaml`
   (`0600`, checked with `borgmatic config validate` before it is put in place)
-- Renders `borgmatic.service` (`create --stats` + `check`) and `borgmatic.timer`
-  (default daily at 02:00 plus up to 1h random delay) and enables the timer
-  where systemd is PID 1
+- Creates the repository on the server (`borg init`, `repokey-blake2`) if it
+  doesn't exist yet
+- Exports the repository key once and stores it vault-encrypted on the
+  controller as `borg_keys/<host>.key` next to the inventory
+- Renders `borgmatic.service` (`create`, `prune`, `compact`, `check`) and
+  `borgmatic.timer` (default daily at 02:00 plus up to 1h random delay), and
+  enables the timer where systemd is PID 1
 
 ## Gotchas
 
-- **No prune or compact here.** The repository is append-only for this host.
-  Retention is applied by the server, and you set it per host with
-  `borgmatic_client_retention`. Running `borgmatic prune` by hand does nothing
-  useful.
-- **The repository is created by the server**, not by this role. Run
-  `playbooks/borg_backup.yml`, which orders the plays client keygen, then server,
-  then client config, rather than this role on its own on a new host.
-- **The repokey is exported by the server role**, vault-encrypted into the
-  private inventory (`borg_keys/<host>.key`). You don't need to export it by hand.
-- **The passphrase also ends up on the server** (see the borg_server README) and
-  must come from vault.
+- **The passphrase exists only here and in vault.** The server never sees it,
+  so a compromised server can't read the backups.
+- **Retention is set here** (`borgmatic_client_retention`). Archives this host
+  prunes stay recoverable from the server's btrfs snapshots for the snapshot
+  retention (default about 3 months).
+- **The repository is created over SSH**, so the server role must have rendered
+  this host's `authorized_keys` line first. Run `playbooks/borg_backup.yml`
+  rather than this role on its own on a new host. If the server's backup disk
+  isn't mounted, repository creation fails, as it should.
+- **The key export runs only if the key file is missing.** It never overwrites
+  an export. If you re-create a repository, delete the old `.key` file first.
+- **The key export needs the vault password non-interactively** because the key
+  is piped into `ansible-vault encrypt` on the controller. That means
+  `ANSIBLE_VAULT_PASSWORD_FILE` or `vault_identity_list` in the config, or a
+  `--vault-id` in `borgmatic_client_key_export_vault_args`. `--ask-vault-pass`
+  alone doesn't work.
+- **Commit the exported keys to the private inventory repo**, not this one.
 - `one_file_system: true` is set. Mounts under a source directory are skipped
   unless you list them explicitly.
 - Database dumps: set `borgmatic_client_postgresql_databases`, for example
   `[{name: all}]`. It is passed to borgmatic's `postgresql_databases` hook as-is.
+
+## Restoring after the repository config is lost
+
+You need the repository data, the passphrase from vault and the exported key:
+
+```bash
+ansible-vault view inventories/production/borg_keys/apphost.key > /tmp/apphost.key
+borg key import ssh://borg@backuphost:22/srv/borg/data/apphost /tmp/apphost.key
+shred -u /tmp/apphost.key
+```
 
 ## Key variables
 
@@ -41,16 +61,18 @@ repository on a [borg_server](../borg_server/README.md), on a systemd timer.
 - `borgmatic_client_passphrase`: repository passphrase, from vault (required)
 - `borgmatic_client_server_address` / `_port`: SSH target (default: the server's
   `ansible_host` / `sshd_port`, else its inventory name / 22)
+- `borgmatic_client_retention`: borgmatic `keep_*` options (default 7 daily,
+  4 weekly, 6 monthly)
 - `borgmatic_client_source_directories`: default `/etc`, `/root`, `/home`,
   `/var/backups`, `/usr/local`
 - `borgmatic_client_exclude_patterns`: default root and home `.cache`
-- `borgmatic_client_retention`: per-host override of `borg_server_retention`
-  (default `{}`)
 - `borgmatic_client_postgresql_databases`: borgmatic DB hook (default `[]`)
 - `borgmatic_client_on_calendar`: systemd `OnCalendar` (default
   `*-*-* 02:00:00`)
 - `borgmatic_client_backup_now`: run one backup during the converge (default
   `false`)
+- `borgmatic_client_key_export` / `_dir` / `_vault_args`: repository key export
+  (default on, `{{ inventory_dir }}/borg_keys`, no extra arguments)
 
 ## Usage
 
@@ -66,6 +88,8 @@ borgmatic_client_passphrase: "{{ vault_borgmatic_client_passphrase }}"
 # host_vars/apphost/vars.yml
 borgmatic_client_retention:
   keep_daily: 14
+  keep_weekly: 8
+  keep_monthly: 12
 
 # vault.yml (ansible-vault). Use one passphrase per host if you can.
 vault_borgmatic_client_passphrase: "..."
