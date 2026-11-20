@@ -4,8 +4,8 @@
 #
 # 1_install and 2_ssh have to run before the borg_server role (it reads the key
 # 2_ssh generates), and 4_repository after it (it connects through the
-# authorized_keys entry the server renders). playbooks/borg_backup.yml handles
-# that ordering.
+# authorized_keys entry the server renders). playbooks/borg_client_setup.yml
+# handles that ordering.
 
 - import_tasks: 1_install.yml
   tags: [install]

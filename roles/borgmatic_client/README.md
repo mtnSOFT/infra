@@ -30,7 +30,7 @@ repository on a [borg_server](../borg_server/README.md), on a systemd timer.
   retention (default about 3 months).
 - **The repository is created over SSH**, so the server role must have rendered
   this host's `authorized_keys` line first. Add a new host with
-  `playbooks/borg_backup.yml`. If the server's backup disk
+  `playbooks/borg_client_setup.yml`. If the server's backup disk
   isn't mounted, repository creation fails, as it should.
 - **The key export runs only if the key file is missing.** It never overwrites
   an export. If you re-create a repository, delete the old `.key` file first.
@@ -78,15 +78,15 @@ shred -u /tmp/apphost.key
 
 | Playbook | Runs | Use it for |
 |---|---|---|
-| `playbooks/borg_backup.yml` | client keygen, then server, then clients | adding a client, first setup |
+| `playbooks/borg_client_setup.yml` | client keygen, then server, then clients | adding a client, first setup |
 | `playbooks/borg_server.yml` | server only | server changes (snapshots, scrub, removing a client) |
 | `playbooks/borgmatic_clients.yml` | clients only | client changes (sources, retention, schedule) |
 
 ```bash
-ansible-playbook -i inventories/production/hosts playbooks/borg_backup.yml -l apphost,backuphost
+ansible-playbook -i inventories/production/hosts playbooks/borg_client_setup.yml -l apphost,backuphost
 ```
 
-`borg_backup.yml` needs both the new client and its server in `--limit`.
+`borg_client_setup.yml` needs both the new client and its server in `--limit`.
 
 Configure it in `group_vars/borgmatic_clients/` or per host:
 

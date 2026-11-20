@@ -117,15 +117,15 @@ cp -a --reflink=always /srv/borg/.snapshots/data.20261201T0600/apphost /srv/borg
 
 | Playbook | Runs | Use it for |
 |---|---|---|
-| `playbooks/borg_backup.yml` | client keygen, then server, then clients | adding a client, first setup |
+| `playbooks/borg_client_setup.yml` | client keygen, then server, then clients | adding a client, first setup |
 | `playbooks/borg_server.yml` | server only | server changes (snapshots, scrub, removing a client) |
 | `playbooks/borgmatic_clients.yml` | clients only | client changes (sources, retention, schedule) |
 
 ```bash
-ansible-playbook -i inventories/production/hosts playbooks/borg_backup.yml -l apphost,backuphost
+ansible-playbook -i inventories/production/hosts playbooks/borg_client_setup.yml -l apphost,backuphost
 ```
 
-`borg_backup.yml` needs both the new client and its server in `--limit`.
+`borg_client_setup.yml` needs both the new client and its server in `--limit`.
 
 ```ini
 [borg_servers]

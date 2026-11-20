@@ -30,7 +30,7 @@
   ansible.builtin.debug:
     msg: >-
       {{ item.item }} has no borg SSH key yet and is not authorized. Run
-      playbooks/borg_backup.yml to add it.
+      playbooks/borg_client_setup.yml to add it.
   loop: "{{ borg_server_client_pubkeys.results | rejectattr('content', 'defined') | list }}"
   loop_control:
     label: "{{ item.item }}"

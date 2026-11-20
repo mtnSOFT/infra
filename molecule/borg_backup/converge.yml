@@ -27,5 +27,5 @@
         state: directory
         mode: "0700"
 
-- name: Run the borg_backup playbook
-  ansible.builtin.import_playbook: ../../playbooks/borg_backup.yml
+- name: Run the borg_client_setup playbook
+  ansible.builtin.import_playbook: ../../playbooks/borg_client_setup.yml
