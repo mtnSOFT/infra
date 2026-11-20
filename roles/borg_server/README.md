@@ -71,9 +71,9 @@ Then run the playbook. It fixes ownership of `/srv/borg/data` and creates
 - **A client removed from the inventory loses SSH access** on the next run
   because `authorized_keys` is rendered whole. Its repository stays, and you
   delete it by hand.
-- **Every client must have run `borgmatic_client` at least once** (or at least
-  its `2_ssh` tasks), otherwise reading its key fails.
-  `playbooks/borg_backup.yml` handles that ordering.
+- **A client that has never run `borgmatic_client` is skipped with a warning.**
+  It has no key yet. An unreachable client fails the run instead, because
+  rendering `authorized_keys` without it would lock it out while it's only down.
 - **Timers are only enabled with systemd and `borg_server_require_btrfs: true`.**
   The molecule container has neither, so the units are rendered and not
   enabled.
@@ -115,7 +115,17 @@ cp -a --reflink=always /srv/borg/.snapshots/data.20261201T0600/apphost /srv/borg
 
 ## Usage
 
-`ansible-playbook -i inventories/production/hosts playbooks/borg_backup.yml`
+| Playbook | Runs | Use it for |
+|---|---|---|
+| `playbooks/borg_backup.yml` | client keygen, then server, then clients | adding a client, first setup |
+| `playbooks/borg_server.yml` | server only | server changes (snapshots, scrub, removing a client) |
+| `playbooks/borgmatic_clients.yml` | clients only | client changes (sources, retention, schedule) |
+
+```bash
+ansible-playbook -i inventories/production/hosts playbooks/borg_backup.yml -l apphost,backuphost
+```
+
+`borg_backup.yml` needs both the new client and its server in `--limit`.
 
 ```ini
 [borg_servers]

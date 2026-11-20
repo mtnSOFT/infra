@@ -1,0 +1,13 @@
+---
+- name: Configure borg servers
+  hosts: borg_servers
+  become: yes
+  tasks:
+    - name: Update apt cache (from linux_base)
+      include_role:
+        name: linux_base
+        tasks_from: 3_update-apt-cache
+
+    - name: Configure borg server
+      include_role:
+        name: borg_server

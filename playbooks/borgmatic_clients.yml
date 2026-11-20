@@ -1,0 +1,13 @@
+---
+- name: Configure borgmatic clients
+  hosts: borgmatic_clients
+  become: yes
+  tasks:
+    - name: Update apt cache (from linux_base)
+      include_role:
+        name: linux_base
+        tasks_from: 3_update-apt-cache
+
+    - name: Configure borgmatic client
+      include_role:
+        name: borgmatic_client

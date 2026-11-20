@@ -1,7 +1,7 @@
 ---
-# Three plays because of the SSH key exchange: clients generate their key, the
-# server authorizes every client key, then clients get their config, create their
-# repository over that SSH access and enable their timer.
+# Server and clients together, in the order a new client needs: the client
+# generates its SSH key, the server authorizes it, then the client creates its
+# repository over that access.
 
 - name: Prepare borgmatic clients (packages + SSH key)
   hosts: borgmatic_clients
@@ -23,20 +23,7 @@
         tasks_from: 2_ssh
 
 - name: Configure borg servers
-  hosts: borg_servers
-  become: yes
-  tasks:
-    - name: Update apt cache (from linux_base)
-      include_role:
-        name: linux_base
-        tasks_from: 3_update-apt-cache
-
-    - name: Configure borg server
-      include_role:
-        name: borg_server
+  ansible.builtin.import_playbook: borg_server.yml
 
 - name: Configure borgmatic clients
-  hosts: borgmatic_clients
-  become: yes
-  roles:
-    - role: borgmatic_client
+  ansible.builtin.import_playbook: borgmatic_clients.yml

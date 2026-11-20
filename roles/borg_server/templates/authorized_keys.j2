@@ -2,6 +2,6 @@
 # One line per borgmatic client. Each key can only run borg serve against its
 # own repository. Deletion protection comes from the btrbk snapshots, not from
 # borg's append-only mode.
-{% for result in borg_server_client_pubkeys.results %}
+{% for result in borg_server_client_pubkeys.results | selectattr('content', 'defined') %}
 command="borg serve --restrict-to-repository {{ borg_server_repos_dir }}/{{ result.item }}",restrict {{ (result.content | b64decode).split()[:2] | join(' ') }} {{ result.item }}
 {% endfor %}
