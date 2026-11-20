@@ -1,0 +1,16 @@
+---
+# The test container is both the borg server and its only client, reaching
+# itself over SSH on localhost.
+borgmatic_client_server: "testhost-ubuntu-24.04"
+borgmatic_client_server_address: "localhost"
+
+# Test-only value, not used anywhere else. Plain here instead of a vault file
+# so the scenario needs nothing beyond molecule/.ansible_vault_pass.txt.
+borgmatic_client_passphrase: "molecule-test-passphrase"
+
+# Small and fast to back up in the live test.
+borgmatic_client_source_directories:
+  - /etc/borgmatic
+
+borgmatic_client_retention:
+  keep_daily: 3

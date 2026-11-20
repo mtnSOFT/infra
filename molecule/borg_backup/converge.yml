@@ -1,0 +1,18 @@
+---
+# One container plays server and client (inventories/test/group_vars/
+# borgmatic_clients/). It has no systemd, so the timers are rendered but not
+# enabled; the tests start sshd by hand and run a real backup over SSH.
+- name: Prepare the borg server
+  hosts: borg_servers
+  become: true
+  tasks:
+    # A real server already runs sshd; the container needs it for the host key
+    # the client role reads, and for the live backup in the tests.
+    - name: Install openssh-server for testing
+      ansible.builtin.apt:
+        name: openssh-server
+        state: present
+        update_cache: true
+
+- name: Run the borg_backup playbook
+  ansible.builtin.import_playbook: ../../playbooks/borg_backup.yml

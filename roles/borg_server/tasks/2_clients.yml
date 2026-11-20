@@ -1,0 +1,63 @@
+---
+# Clients of this server: members of borg_server_clients_group whose
+# borgmatic_client_server names this host. Several servers can share the group.
+- name: Determine the borg clients of this server
+  ansible.builtin.set_fact:
+    borg_server_clients: >-
+      {{ groups[borg_server_clients_group] | default([])
+         | map('extract', hostvars)
+         | selectattr('borgmatic_client_server', 'defined')
+         | selectattr('borgmatic_client_server', 'equalto', inventory_hostname)
+         | map(attribute='inventory_hostname')
+         | list }}
+
+# Read from the clients themselves rather than from a fact the client play set,
+# so this role also works under --limit to the server alone. Fails if a client
+# has never run borgmatic_client - which is right: rendering authorized_keys
+# without it would lock that client out.
+- name: Read the clients' borg SSH public keys
+  ansible.builtin.slurp:
+    src: "{{ hostvars[item].borgmatic_client_ssh_key | default('/root/.ssh/borg_ed25519') }}.pub"
+  delegate_to: "{{ item }}"
+  loop: "{{ borg_server_clients }}"
+  register: borg_server_client_pubkeys
+  no_log: false
+
+# Rendered as a whole, so a client removed from the inventory loses access on the
+# next converge. Its repository is left in place.
+- name: Render the borg authorized_keys
+  ansible.builtin.template:
+    src: authorized_keys.j2
+    dest: "{{ borg_server_home }}/.ssh/authorized_keys"
+    owner: borg
+    group: borg
+    mode: "0600"
+
+- name: Write the client repository passphrases
+  ansible.builtin.copy:
+    content: "{{ hostvars[item].borgmatic_client_passphrase }}"
+    dest: "{{ borg_server_passphrase_dir }}/{{ item }}"
+    owner: borg
+    group: borg
+    mode: "0400"
+  loop: "{{ borg_server_clients }}"
+  no_log: true
+
+# Created here and not by the client, because the client only ever reaches the
+# server through `borg serve --append-only` and needs no network access at
+# converge time this way. runuser instead of become_user: becoming an
+# unprivileged user needs setfacl or world-readable temp files.
+- name: Initialise the client repositories
+  ansible.builtin.command:
+    cmd: >-
+      runuser -u borg --
+      borg init --encryption {{ borg_server_encryption }}
+      {{ borg_server_repos_dir }}/{{ item }}
+    creates: "{{ borg_server_repos_dir }}/{{ item }}/config"
+  environment:
+    HOME: "{{ borg_server_home }}"
+    BORG_PASSCOMMAND: "cat {{ borg_server_passphrase_dir }}/{{ item }}"
+  loop: "{{ borg_server_clients }}"
+  # The passphrase is not on the command line or in borg's output; keep failures
+  # readable despite ansible.cfg's global no_log.
+  no_log: false

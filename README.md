@@ -20,6 +20,8 @@ directory structure:
 | Role                                                     | Description                                                                |
 |----------------------------------------------------------|----------------------------------------------------------------------------|
 | [acme_client](roles/acme_client/README.md)               | Let's Encrypt certificates via acme.sh + Infomaniak DNS-01                 |
+| [borg_server](roles/borg_server/README.md)               | Borg repository host: append-only SSH access per client, server-side prune |
+| [borgmatic_client](roles/borgmatic_client/README.md)     | Nightly borgmatic backups to a borg_server on a systemd timer              |
 | [docker-compose](roles/docker-compose/README.md)         | Docker Engine + Compose plugin from the official apt repo                  |
 | [dyndns_client](roles/dyndns_client/README.md)           | Keeps a dynamic DNS record up to date at Infomaniak via cron               |
 | [gitea](roles/gitea/README.md)                           | Gitea self-hosted git service as a Docker Compose stack                    |

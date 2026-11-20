@@ -1,0 +1,35 @@
+---
+# Home of the borg user. Clients connect as borg@<this host> and borg serve runs
+# with this as its working directory.
+borg_server_home: "/srv/borg"
+
+# One repository per client below this directory, named after the client's
+# inventory_hostname. Clients read this value through hostvars to build their
+# repository URL, so override it in the inventory, not with -e on one play.
+borg_server_repos_dir: "{{ borg_server_home }}/repos"
+
+# Holds one passphrase file per client (0400 borg). The server needs them because
+# clients are append-only and pruning runs here - see README "Gotchas".
+borg_server_passphrase_dir: "/etc/borg-server"
+
+# Inventory group whose hosts are backup clients. Only clients whose
+# borgmatic_client_server names this host are served by it.
+borg_server_clients_group: "borgmatic_clients"
+
+# Encryption mode for repositories this role creates. Changing it affects new
+# repositories only; borg cannot convert an existing one.
+borg_server_encryption: "repokey-blake2"
+
+# Retention applied by the server-side prune. A client overrides any of these
+# with borgmatic_client_retention, e.g. {keep_daily: 14}.
+borg_server_retention:
+  keep_daily: 7
+  keep_weekly: 4
+  keep_monthly: 6
+
+# systemd OnCalendar of the prune + compact run. Placed well after the default
+# client backup window (02:00 + up to 1h random delay); a prune that overlaps a
+# running backup waits on the repository lock for up to
+# borg_server_lock_wait seconds.
+borg_server_prune_on_calendar: "*-*-* 05:30:00"
+borg_server_lock_wait: 600

@@ -1,0 +1,31 @@
+---
+- name: Install borgbackup
+  ansible.builtin.apt:
+    name: borgbackup
+    state: present
+
+# A login shell is required: sshd runs the forced command from authorized_keys
+# through it. "*" instead of the default "!" because a "!"-locked account can be
+# refused public-key login depending on sshd's UsePAM setting; "*" matches no
+# password but is not "locked".
+- name: Create the borg user
+  ansible.builtin.user:
+    name: borg
+    system: true
+    home: "{{ borg_server_home }}"
+    create_home: true
+    shell: /bin/sh
+    password: "*"
+
+- name: Create the borg directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: borg
+    group: borg
+    mode: "0700"
+  loop:
+    - "{{ borg_server_home }}"
+    - "{{ borg_server_home }}/.ssh"
+    - "{{ borg_server_repos_dir }}"
+    - "{{ borg_server_passphrase_dir }}"

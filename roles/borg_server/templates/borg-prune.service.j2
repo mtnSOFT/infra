@@ -1,0 +1,12 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Prune and compact borg repositories
+
+[Service]
+Type=oneshot
+User=borg
+Group=borg
+ExecStart=/usr/local/bin/borg-prune-all.sh
+Nice=19
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

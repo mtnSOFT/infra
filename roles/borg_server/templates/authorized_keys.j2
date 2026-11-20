@@ -1,0 +1,6 @@
+# {{ ansible_managed }}
+# One line per borgmatic client. Each key can only run borg serve, append-only,
+# against its own repository.
+{% for result in borg_server_client_pubkeys.results %}
+command="borg serve --append-only --restrict-to-repository {{ borg_server_repos_dir }}/{{ result.item }}",restrict {{ (result.content | b64decode).split()[:2] | join(' ') }} {{ result.item }}
+{% endfor %}
