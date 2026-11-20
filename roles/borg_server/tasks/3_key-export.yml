@@ -1,0 +1,65 @@
+---
+# With repokey encryption the key lives only in the repository's config file: if
+# that file is damaged, the passphrase alone cannot decrypt anything. Each key is
+# exported once into the (private) inventory, vault-encrypted, next to the
+# passphrase it belongs to.
+#
+# Only missing files are exported, so an existing export is never overwritten
+# and repositories created before this task existed are picked up on the next run.
+
+- name: Check for existing borg key exports
+  ansible.builtin.stat:
+    path: "{{ borg_server_key_export_dir }}/{{ item }}.key"
+  delegate_to: localhost
+  become: false
+  loop: "{{ borg_server_clients }}"
+  register: borg_server_key_exports
+  when: borg_server_key_export | bool
+
+- name: Create the borg key export directory
+  ansible.builtin.file:
+    path: "{{ borg_server_key_export_dir }}"
+    state: directory
+    mode: "0700"
+  delegate_to: localhost
+  become: false
+  run_once: true
+  when: borg_server_key_export | bool
+
+# Read-only: prints the stored key (itself still passphrase-encrypted), no
+# passphrase needed.
+- name: Export missing borg repository keys
+  ansible.builtin.command:
+    cmd: "runuser -u borg -- borg key export {{ borg_server_repos_dir }}/{{ item.item }}"
+  environment:
+    HOME: "{{ borg_server_home }}"
+  loop: "{{ borg_server_key_exports.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item }}"
+  register: borg_server_exported_keys
+  changed_when: false
+  when:
+    - borg_server_key_export | bool
+    - not item.stat.exists
+
+# Encrypted from stdin straight into the target file, so the key never touches the
+# controller's disk in plain text. Uses the controller's vault configuration
+# (ANSIBLE_VAULT_PASSWORD_FILE or vault_identity_list); --ask-vault-pass cannot
+# work here because stdin carries the key - pass a --vault-id through
+# borg_server_key_export_vault_args instead.
+- name: Store the borg repository keys vault-encrypted in the inventory
+  ansible.builtin.command:
+    cmd: >-
+      ansible-vault encrypt {{ borg_server_key_export_vault_args }}
+      --output {{ borg_server_key_export_dir }}/{{ item.item.item }}.key -
+    stdin: "{{ item.stdout }}"
+    creates: "{{ borg_server_key_export_dir }}/{{ item.item.item }}.key"
+  delegate_to: localhost
+  become: false
+  loop: "{{ borg_server_exported_keys.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item.item | default('') }}"
+  when:
+    - borg_server_key_export | bool
+    - item.stdout is defined
+  no_log: true

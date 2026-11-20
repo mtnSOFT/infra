@@ -26,9 +26,8 @@ repository on a [borg_server](../borg_server/README.md), on a systemd timer.
 - **The repository is created by the server**, not by this role. Run
   `playbooks/borg_backup.yml`, which orders the plays client keygen, then server,
   then client config, rather than this role on its own on a new host.
-- **Export the repokey** after the first converge and keep it somewhere outside
-  the backup: `borgmatic key export --path /some/safe/place`. Without it and the
-  passphrase, a lost repository config means lost backups.
+- **The repokey is exported by the server role**, vault-encrypted into the
+  private inventory (`borg_keys/<host>.key`). You don't need to export it by hand.
 - **The passphrase also ends up on the server** (see the borg_server README) and
   must come from vault.
 - `one_file_system: true` is set. Mounts under a source directory are skipped

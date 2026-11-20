@@ -1,3 +1,5 @@
+import os
+
 import pytest
 
 CLIENT = "testhost-ubuntu-24.04"
@@ -53,6 +55,18 @@ def test_passphrase_file(host):
 
 def test_repository_initialised(host):
     assert host.file(f"{REPO}/config").exists
+
+
+def test_repository_key_exported_vault_encrypted():
+    # Lands on the controller, not in the container: borg_server_key_export_dir
+    # points into molecule's ephemeral directory for this scenario.
+    path = os.path.join(
+        os.environ["MOLECULE_EPHEMERAL_DIRECTORY"], "borg_keys", f"{CLIENT}.key"
+    )
+    with open(path) as f:
+        content = f.read()
+    assert content.startswith("$ANSIBLE_VAULT;")
+    assert "BORG_KEY" not in content
 
 
 def test_prune_script_uses_client_retention(host):

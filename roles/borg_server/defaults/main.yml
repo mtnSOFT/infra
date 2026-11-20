@@ -20,6 +20,16 @@ borg_server_clients_group: "borgmatic_clients"
 # repositories only; borg cannot convert an existing one.
 borg_server_encryption: "repokey-blake2"
 
+# Export each repository key once, vault-encrypted, to the controller - see
+# tasks/3_key-export.yml. The default puts it next to the hosts file of the
+# inventory in use, e.g. inventories/production/borg_keys/<client>.key.
+borg_server_key_export: true
+borg_server_key_export_dir: "{{ inventory_dir }}/borg_keys"
+
+# Extra arguments for the controller-side `ansible-vault encrypt`, e.g.
+# "--vault-id prod@~/.vault_pass". Empty uses the controller's vault config.
+borg_server_key_export_vault_args: ""
+
 # Retention applied by the server-side prune. A client overrides any of these
 # with borgmatic_client_retention, e.g. {keep_daily: 14}.
 borg_server_retention:

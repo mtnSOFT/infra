@@ -1,0 +1,4 @@
+---
+# Keep the key export out of the repo: write it into molecule's ephemeral
+# directory, where tests/test_borg_backup.py checks it.
+borg_server_key_export_dir: "{{ lookup('ansible.builtin.env', 'MOLECULE_EPHEMERAL_DIRECTORY') }}/borg_keys"

@@ -17,6 +17,10 @@ in append-only mode. Pruning and compacting happen on this host.
 - Writes each client's passphrase to `borg_server_passphrase_dir/<client>`
   (`0400 borg`) and runs `borg init --encryption repokey-blake2` on new
   repositories
+- Exports each repository key once (`borg key export`) and stores it
+  vault-encrypted on the controller as
+  `borg_server_key_export_dir/<client>.key`, by default
+  `inventories/<env>/borg_keys/` in the private inventory
 - Installs `/usr/local/bin/borg-prune-all.sh` and a daily `borg-prune.timer`
   that runs `borg prune` + `borg compact` on every client repository
 
@@ -39,9 +43,14 @@ in append-only mode. Pruning and compacting happen on this host.
 - **Every client must have run `borgmatic_client` at least once** (or at least
   its `2_ssh` tasks), otherwise reading its key fails.
   `playbooks/borg_backup.yml` handles that ordering.
-- Repositories are created here, so the repokey lives only in the repository.
-  Export it from the client and keep it outside the backup:
-  `borgmatic key export`.
+- **The key export runs only if the key file is missing.** It never overwrites
+  an export. If you re-create a repository, delete the old `.key` file first.
+- **The export needs the vault password non-interactively** because the key is
+  piped into `ansible-vault encrypt` on the controller. That means
+  `ANSIBLE_VAULT_PASSWORD_FILE` or `vault_identity_list` in the config, or a
+  `--vault-id` in `borg_server_key_export_vault_args`. `--ask-vault-pass` alone
+  doesn't work.
+- **Commit the exported keys to the private inventory repo**, not this one.
 - The timer is only enabled where systemd is PID 1. In the molecule container
   the units are rendered and not enabled.
 - Clients need to reach this host's sshd, so open that port for them in ufw or
@@ -63,6 +72,12 @@ in append-only mode. Pruning and compacting happen on this host.
 - `borg_server_lock_wait`: seconds the prune waits for a running backup (default
   600)
 - `borg_server_encryption`: mode for new repositories (default `repokey-blake2`)
+- `borg_server_key_export`: export repository keys to the controller (default
+  `true`)
+- `borg_server_key_export_dir`: where they go (default
+  `{{ inventory_dir }}/borg_keys`)
+- `borg_server_key_export_vault_args`: extra `ansible-vault encrypt` arguments
+  (default empty)
 
 ## Usage
 
@@ -75,6 +90,16 @@ backuphost
 [borgmatic_clients]
 apphost
 dnshost
+```
+
+### Restoring after the repository config is lost
+
+You need the repository data, the passphrase from vault and the exported key:
+
+```bash
+ansible-vault view inventories/production/borg_keys/apphost.key > /tmp/apphost.key
+borg key import /srv/borg/repos/apphost /tmp/apphost.key   # on the server, as borg
+shred -u /tmp/apphost.key
 ```
 
 To check by hand on the server:

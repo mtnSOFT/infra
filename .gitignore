@@ -2,3 +2,4 @@ megalinter-reports/
 inventories/production
 .galaxy/
 inventories/test/wireguard_configs
+inventories/test/borg_keys
