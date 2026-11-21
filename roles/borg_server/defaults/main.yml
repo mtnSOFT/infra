@@ -1,17 +1,13 @@
 ---
-# Home of the borg user: SSH config and authorized_keys. Deliberately not on the
-# backup disk, so SSH keeps working when the disk is missing and clients fail
-# with "repository does not exist" instead of a login error.
+# Home of the borg user: SSH config and authorized_keys.
 borg_server_home: "/var/lib/borg"
 
 # Where the btrfs backup disk is mounted (see README for the one-time setup).
 borg_server_mount: "/srv/borg"
 
 # One repository per client below this directory, named after the client's
-# inventory_hostname. It is a btrfs subvolume on the backup disk and only exists
-# while the disk is mounted - which is the whole point: an unmounted disk makes
-# every backup fail instead of quietly filling the root filesystem. The role
-# never creates it.
+# inventory_hostname. A btrfs subvolume on the backup disk; the role never
+# creates it (see README "Disk setup").
 #
 # Clients read this value through hostvars to build their repository URL, so
 # override it in the inventory, not with -e on one play.

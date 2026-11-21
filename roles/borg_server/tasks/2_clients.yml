@@ -36,9 +36,7 @@
     label: "{{ item.item }}"
 
 # Rendered as a whole, so a client removed from the inventory loses access on the
-# next converge. Its repository is left in place. Repositories themselves are
-# created by the clients (borg init over this same forced command) - the server
-# never holds a passphrase.
+# next converge. Its repository is left in place.
 - name: Render the borg authorized_keys
   ansible.builtin.template:
     src: authorized_keys.j2
