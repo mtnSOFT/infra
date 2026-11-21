@@ -1,0 +1,10 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Monthly btrfs scrub of the borg backup disk
+
+[Timer]
+OnCalendar={{ borg_server_scrub_on_calendar }}
+Persistent=true
+
+[Install]
+WantedBy=timers.target

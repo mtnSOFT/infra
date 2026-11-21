@@ -1,0 +1,5 @@
+---
+# The container cannot mount btrfs. molecule/borg_backup/converge.yml creates
+# /srv/borg/data as a plain directory instead; the btrbk config and scrub units
+# are still rendered, just not enabled.
+borg_server_require_btrfs: false

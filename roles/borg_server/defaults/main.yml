@@ -1,0 +1,40 @@
+---
+# Home of the borg user: SSH config and authorized_keys.
+borg_server_home: "/var/lib/borg"
+
+# Where the btrfs backup disk is mounted (see README for the one-time setup).
+borg_server_mount: "/srv/borg"
+
+# One repository per client below this directory, named after the client's
+# inventory_hostname. A btrfs subvolume on the backup disk; the role never
+# creates it (see README "Disk setup").
+#
+# Clients read this value through hostvars to build their repository URL, so
+# override it in the inventory, not with -e on one play.
+borg_server_repos_dir: "{{ borg_server_mount }}/data"
+
+# Fail unless borg_server_repos_dir is a btrfs subvolume, and only enable the
+# snapshot and scrub timers when it is. false in molecule: the container cannot
+# mount btrfs.
+borg_server_require_btrfs: true
+
+# Inventory group whose hosts are backup clients. Only clients whose
+# borgmatic_client_server names this host are served by it.
+borg_server_clients_group: "borgmatic_clients"
+
+# btrbk snapshots of borg_server_repos_dir, read-only and out of every client's
+# reach. This is what protects against a compromised client deleting its own
+# archives: snapshot_preserve is the window you have to notice. Syntax per the
+# btrbk.conf man page.
+borg_server_snapshot_dir: ".snapshots"
+borg_server_snapshot_preserve_min: "2d"
+borg_server_snapshot_preserve: "14d 8w 3m"
+
+# After the client backup window (02:00 + up to 1h random delay by default). A
+# snapshot taken mid-backup is still fine - borg sees it like a power cut and
+# rolls the unfinished transaction back - but there is no reason to provoke it.
+borg_server_snapshot_on_calendar: "*-*-* 06:00:00"
+
+# Monthly btrfs scrub of the backup disk. On a single disk it detects bit rot
+# but cannot repair data; a failure shows up as a failed systemd unit.
+borg_server_scrub_on_calendar: "*-*-01 08:00:00"

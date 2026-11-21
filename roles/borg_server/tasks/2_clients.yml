@@ -1,0 +1,46 @@
+---
+# Clients of this server: members of borg_server_clients_group whose
+# borgmatic_client_server names this host. Several servers can share the group.
+- name: Determine the borg clients of this server
+  ansible.builtin.set_fact:
+    borg_server_clients: >-
+      {{ groups[borg_server_clients_group] | default([])
+         | map('extract', hostvars)
+         | selectattr('borgmatic_client_server', 'defined')
+         | selectattr('borgmatic_client_server', 'equalto', inventory_hostname)
+         | map(attribute='inventory_hostname')
+         | list }}
+
+# A client without a key file has never run borgmatic_client: it is skipped with
+# a warning and picked up on the next run after it has. Any other error - above
+# all an unreachable client - still fails the play, because rendering
+# authorized_keys without that client would lock it out while it is only down.
+- name: Read the clients' borg SSH public keys
+  ansible.builtin.slurp:
+    src: "{{ hostvars[item].borgmatic_client_ssh_key | default('/root/.ssh/borg_ed25519') }}.pub"
+  delegate_to: "{{ item }}"
+  loop: "{{ borg_server_clients }}"
+  register: borg_server_client_pubkeys
+  failed_when:
+    - borg_server_client_pubkeys is failed
+    - "'not found' not in borg_server_client_pubkeys.msg | default('')"
+  no_log: false
+
+- name: Warn about clients without a borg SSH key
+  ansible.builtin.debug:
+    msg: >-
+      {{ item.item }} has no borg SSH key yet and is not authorized. Run
+      playbooks/borg_client_setup.yml to add it.
+  loop: "{{ borg_server_client_pubkeys.results | rejectattr('content', 'defined') | list }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+# Rendered as a whole, so a client removed from the inventory loses access on the
+# next converge. Its repository is left in place.
+- name: Render the borg authorized_keys
+  ansible.builtin.template:
+    src: authorized_keys.j2
+    dest: "{{ borg_server_home }}/.ssh/authorized_keys"
+    owner: borg
+    group: borg
+    mode: "0600"

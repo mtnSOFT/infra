@@ -21,3 +21,9 @@ testhost-ubuntu-24.04
 
 [dyndns_clients]
 testhost-ubuntu-24.04
+
+[borg_servers]
+testhost-ubuntu-24.04
+
+[borgmatic_clients]
+testhost-ubuntu-24.04

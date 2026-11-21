@@ -1,0 +1,42 @@
+# {{ ansible_managed }}
+# borgmatic 1.8 flat configuration. Pruned archives stay recoverable from the
+# borg server's btrfs snapshots for as long as those are kept.
+
+source_directories:
+{% for dir in borgmatic_client_source_directories %}
+  - {{ dir | to_json }}
+{% endfor %}
+
+repositories:
+  - path: {{ borgmatic_client_repository | to_json }}
+    label: {{ borgmatic_client_server | to_json }}
+
+{% if borgmatic_client_exclude_patterns %}
+exclude_patterns:
+{% for pattern in borgmatic_client_exclude_patterns %}
+  - {{ pattern | to_json }}
+{% endfor %}
+{% endif %}
+
+one_file_system: true
+exclude_caches: true
+compression: {{ borgmatic_client_compression | to_json }}
+archive_name_format: "{hostname}-{now:%Y-%m-%dT%H:%M:%S}"
+
+encryption_passcommand: "cat /etc/borgmatic/passphrase"
+ssh_command: "ssh -i {{ borgmatic_client_ssh_key }} -o BatchMode=yes"
+lock_wait: 600
+
+{% for key, value in borgmatic_client_retention.items() | sort %}
+{{ key }}: {{ value }}
+{% endfor %}
+
+checks:
+  - name: repository
+    frequency: 2 weeks
+  - name: archives
+    frequency: 1 month
+
+{% if borgmatic_client_postgresql_databases %}
+postgresql_databases: {{ borgmatic_client_postgresql_databases | to_json }}
+{% endif %}

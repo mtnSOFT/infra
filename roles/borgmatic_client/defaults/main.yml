@@ -1,0 +1,73 @@
+---
+# Inventory hostname of the borg server (a host running the borg_server role).
+# Used for hostvars lookups and to read its SSH host key. Required.
+borgmatic_client_server: ""
+
+# How this client reaches the server over SSH. Defaults follow the server's own
+# inventory entry; override when the client has to use another name or address,
+# e.g. through a VPN.
+borgmatic_client_server_address: >-
+  {{ hostvars[borgmatic_client_server].ansible_host | default(borgmatic_client_server) }}
+borgmatic_client_server_port: >-
+  {{ hostvars[borgmatic_client_server].sshd_port | default(22) }}
+
+# Must match borg_server_repos_dir on the server; read from its inventory vars
+# when set there.
+borgmatic_client_server_repos_dir: >-
+  {{ hostvars[borgmatic_client_server].borg_server_repos_dir | default('/srv/borg/data') }}
+
+borgmatic_client_repository: >-
+  ssh://borg@{{ borgmatic_client_server_address }}:{{ borgmatic_client_server_port }}{{ borgmatic_client_server_repos_dir }}/{{ inventory_hostname }}
+
+# Repository passphrase, from vault. Lives only here and in vault - the server
+# never sees it. Empty is a configuration error.
+borgmatic_client_passphrase: ""
+
+# Encryption mode used when this role creates the repository. Changing it
+# affects new repositories only; borg cannot convert an existing one.
+borgmatic_client_encryption: "repokey-blake2"
+
+# Dedicated key for the backup connection; the server pins it to borg serve on
+# this client's repository.
+borgmatic_client_ssh_key: "/root/.ssh/borg_ed25519"
+
+borgmatic_client_source_directories:
+  - /etc
+  - /root
+  - /home
+  - /var/backups
+  - /usr/local
+
+borgmatic_client_exclude_patterns:
+  - "/root/.cache"
+  - "/home/*/.cache"
+
+# Passed through to borgmatic's postgresql_databases hook as-is, e.g.
+# [{name: all}]. Empty disables the hook.
+borgmatic_client_postgresql_databases: []
+
+# borgmatic keep_* options. Pruned archives stay recoverable from the server's
+# btrfs snapshots for as long as those are kept.
+borgmatic_client_retention:
+  keep_daily: 7
+  keep_weekly: 4
+  keep_monthly: 6
+
+borgmatic_client_compression: "zstd,3"
+
+# systemd OnCalendar of the backup run; the timer adds up to 1h random delay.
+borgmatic_client_on_calendar: "*-*-* 02:00:00"
+
+# Run one backup during the converge. Off by default: a first backup can take
+# hours. Useful when adding a host by hand.
+borgmatic_client_backup_now: false
+
+# Export the repository key once, vault-encrypted, to the controller - see
+# tasks/5_key-export.yml. The default puts it next to the hosts file of the
+# inventory in use, e.g. inventories/production/borg_keys/<host>.key.
+borgmatic_client_key_export: true
+borgmatic_client_key_export_dir: "{{ inventory_dir }}/borg_keys"
+
+# Extra arguments for the controller-side `ansible-vault encrypt`, e.g.
+# "--vault-id prod@~/.vault_pass". Empty uses the controller's vault config.
+borgmatic_client_key_export_vault_args: ""

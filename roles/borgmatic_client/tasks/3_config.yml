@@ -1,0 +1,29 @@
+---
+- name: Create the borgmatic configuration directory
+  ansible.builtin.file:
+    path: /etc/borgmatic
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+# Kept out of config.yaml so the config can be shown or diffed without leaking it.
+- name: Write the borgmatic repository passphrase
+  ansible.builtin.copy:
+    content: "{{ borgmatic_client_passphrase }}"
+    dest: /etc/borgmatic/passphrase
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Render the borgmatic configuration
+  ansible.builtin.template:
+    src: config.yaml.j2
+    dest: /etc/borgmatic/config.yaml
+    owner: root
+    group: root
+    mode: "0600"
+    validate: borgmatic config validate --config %s
+  # Contains no secret; keep validation errors readable.
+  no_log: false

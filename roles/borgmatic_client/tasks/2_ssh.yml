@@ -1,0 +1,42 @@
+---
+- name: Create root's .ssh directory
+  ansible.builtin.file:
+    path: "{{ borgmatic_client_ssh_key | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+# Generated once and never rotated by the role; delete both files and converge
+# again to rotate (the server picks the new key up on its next run).
+- name: Generate the borg SSH key
+  ansible.builtin.command:
+    cmd: >-
+      ssh-keygen -q -t ed25519 -N ''
+      -C "borgmatic@{{ inventory_hostname }}"
+      -f {{ borgmatic_client_ssh_key }}
+    creates: "{{ borgmatic_client_ssh_key }}"
+
+# Read from the server rather than scanned over the network, so the first
+# connection does not trust whatever answers on that address.
+- name: Read the borg server's SSH host key
+  ansible.builtin.slurp:
+    src: /etc/ssh/ssh_host_ed25519_key.pub
+  delegate_to: "{{ borgmatic_client_server }}"
+  register: borgmatic_client_server_hostkey
+  no_log: false
+
+- name: Trust the borg server's SSH host key
+  ansible.builtin.known_hosts:
+    path: /root/.ssh/known_hosts
+    name: "{{ _known_hosts_name }}"
+    key: >-
+      {{ _known_hosts_name }}
+      {{ (borgmatic_client_server_hostkey.content | b64decode).split()[:2] | join(' ') }}
+    state: present
+  vars:
+    _known_hosts_name: >-
+      {{ borgmatic_client_server_address
+         if (borgmatic_client_server_port | int) == 22
+         else '[' ~ borgmatic_client_server_address ~ ']:' ~ borgmatic_client_server_port }}
+  no_log: false

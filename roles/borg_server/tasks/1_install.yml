@@ -1,0 +1,68 @@
+---
+- name: Install the borg_server packages
+  ansible.builtin.apt:
+    name:
+      - borgbackup
+      - btrbk
+      - btrfs-progs
+    state: present
+
+# A login shell is required: sshd runs the forced command from authorized_keys
+# through it. "*" instead of the default "!" because a "!"-locked account can be
+# refused public-key login depending on sshd's UsePAM setting; "*" matches no
+# password but is not "locked".
+- name: Create the borg user
+  ansible.builtin.user:
+    name: borg
+    system: true
+    home: "{{ borg_server_home }}"
+    create_home: true
+    shell: /bin/sh
+    password: "*"
+
+- name: Create the borg home directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: borg
+    group: borg
+    mode: "0700"
+  loop:
+    - "{{ borg_server_home }}"
+    - "{{ borg_server_home }}/.ssh"
+
+# Never created here: it lives on the backup disk, and creating it on the root
+# filesystem is exactly the failure mode this layout exists to prevent.
+- name: Check the borg data directory
+  ansible.builtin.stat:
+    path: "{{ borg_server_repos_dir }}"
+  register: borg_server_repos_dir_stat
+
+- name: Check that the borg data directory is a btrfs subvolume
+  ansible.builtin.command:
+    cmd: "btrfs subvolume show {{ borg_server_repos_dir }}"
+  register: borg_server_subvolume
+  changed_when: false
+  failed_when: false
+  when:
+    - borg_server_require_btrfs | bool
+    - borg_server_repos_dir_stat.stat.isdir | default(false)
+
+- name: Validate the backup disk
+  ansible.builtin.assert:
+    that:
+      - borg_server_repos_dir_stat.stat.isdir | default(false)
+      - not (borg_server_require_btrfs | bool) or borg_server_subvolume.rc == 0
+    fail_msg: >-
+      {{ borg_server_repos_dir }} is missing or not a btrfs subvolume. Is the
+      backup disk mounted at {{ borg_server_mount }}? For a new disk, follow the
+      "Disk setup" section in roles/borg_server/README.md.
+  no_log: false
+
+- name: Hand the borg data directory to the borg user
+  ansible.builtin.file:
+    path: "{{ borg_server_repos_dir }}"
+    state: directory
+    owner: borg
+    group: borg
+    mode: "0700"
